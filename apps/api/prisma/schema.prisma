@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DISPATCHER
+  COURIER
+}
+
+enum DeliveryStatus {
+  PENDING
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String?   @unique
+  username     String?   @unique
+  pin          String?
+  passwordHash String?
+  fullName     String
+  phone        String?
+  role         Role      @default(COURIER)
+  isActive     Boolean   @default(true)
+  fcmToken     String?
+
+  deliveries Delivery[]
+  locations  CourierLocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  email     String?
+  address   String
+  latitude  Decimal? @db.Decimal(10, 8)
+  longitude Decimal? @db.Decimal(11, 8)
+  notes     String?
+
+  deliveries Delivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+}
+
+model Delivery {
+  id           String         @id @default(uuid())
+  trackingCode String         @unique @default(cuid())
+  customerId   String
+  customer     Customer       @relation(fields: [customerId], references: [id])
+  courierId    String?
+  courier      User?          @relation(fields: [courierId], references: [id])
+  status       DeliveryStatus @default(PENDING)
+  priority     Priority       @default(NORMAL)
+
+  description    String?
+  packageDetails String?
+  scheduledDate  DateTime?
+
+  photoUrl      String?
+  signatureUrl  String?
+  deliveryLat   Decimal? @db.Decimal(10, 8)
+  deliveryLng   Decimal? @db.Decimal(11, 8)
+  deliveredAt   DateTime?
+  deliveryNotes String?
+
+  localId  String?
+  syncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courierId, status])
+  @@index([scheduledDate])
+  @@index([trackingCode])
+  @@map("deliveries")
+}
+
+model CourierLocation {
+  id           String   @id @default(uuid())
+  courierId    String
+  courier      User     @relation(fields: [courierId], references: [id])
+  latitude     Decimal  @db.Decimal(10, 8)
+  longitude    Decimal  @db.Decimal(11, 8)
+  accuracy     Decimal? @db.Decimal(5, 2)
+  speed        Decimal? @db.Decimal(5, 2)
+  batteryLevel Int?
+
+  recordedAt DateTime @default(now())
+
+  @@index([courierId, recordedAt(sort: Desc)])
+  @@map("courier_locations")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

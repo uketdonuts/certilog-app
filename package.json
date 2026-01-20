@@ -1,0 +1,31 @@
+{
+  "name": "certilog",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "dev:api": "turbo dev --filter=@certilog/api",
+    "dev:dashboard": "turbo dev --filter=@certilog/dashboard",
+    "dev:mobile": "turbo dev --filter=@certilog/mobile",
+    "mobile:start": "npm --prefix apps/mobile run dev -- --tunnel",
+    "mobile:start:clear": "npm --prefix apps/mobile run dev -- --tunnel -c",
+    "mobile:web": "npm --prefix apps/mobile run web",
+    "mobile:web:clear": "npm --prefix apps/mobile run web:clear",
+    "db:push": "turbo db:push --filter=@certilog/api",
+    "db:generate": "turbo db:generate --filter=@certilog/api",
+    "db:studio": "turbo db:studio --filter=@certilog/api"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  },
+  "packageManager": "npm@10.2.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

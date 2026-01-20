@@ -1,0 +1,66 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: certilog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: certilog
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API (optional - can run locally for development)
+  api:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    container_name: certilog-api
+    restart: unless-stopped
+    ports:
+      - "2120:3001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/certilog?schema=public
+      - NODE_ENV=production
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:19000,http://localhost:19006,http://localhost:8081,http://192.168.40.52:19006,http://192.168.40.52:3000
+      - JWT_SECRET=certilog-dev-secret-key-change-in-production
+      - JWT_REFRESH_SECRET=certilog-dev-refresh-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Optional: mount source for development instead of building
+    # volumes:
+    #   - ./apps/api:/app/apps/api:delegated
+  # Dashboard (Next.js)
+  dashboard:
+    build:
+      context: .
+      dockerfile: ./apps/dashboard/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:2120
+        - NEXT_PUBLIC_SOCKET_URL=http://localhost:2120
+    container_name: certilog-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:2120
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:2120
+    depends_on:
+      - api
+      - postgres
+    # Optional: mount source for development instead of building
+    # volumes:
+    #   - ./apps/dashboard:/app/apps/dashboard:delegated
+
+volumes:
+  postgres_data:

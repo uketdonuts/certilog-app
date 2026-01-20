@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "CertiLog",
+    "slug": "certilog",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "certilog",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#3B82F6"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.certilog.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Necesitamos acceso a la cámara para tomar fotos de las entregas",
+        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para registrar las entregas",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Necesitamos tu ubicación para el seguimiento en tiempo real"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#3B82F6"
+      },
+      "package": "com.certilog.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "webpack",
+      "output": "static",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir a CertiLog usar tu ubicación para el seguimiento de entregas"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir a CertiLog acceder a tu cámara para tomar fotos de entregas"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permitir a CertiLog acceder a tus fotos"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
