@@ -22,10 +22,12 @@ export interface Delivery {
   scheduledDate: string | null;
   photoUrl: string | null;
   signatureUrl: string | null;
+  videoUrl: string | null;
   deliveryLat: number | null;
   deliveryLng: number | null;
   deliveredAt: string | null;
   deliveryNotes: string | null;
+  rating: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +38,21 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+export interface DeliveryRoutePoint {
+  id: string;
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  speed: number | null;
+  batteryLevel: number | null;
+  recordedAt: string;
+}
+
+export interface DeliveryRouteResponse {
+  deliveryId: string;
+  points: DeliveryRoutePoint[];
 }
 
 export async function getMyDeliveries(
@@ -69,22 +86,38 @@ export async function updateDeliveryStatus(
   return response.data.data;
 }
 
+export async function startDelivery(id: string): Promise<Delivery> {
+  const response = await api.put(`/api/deliveries/${id}/start`);
+  return response.data.data;
+}
+
 export async function completeDelivery(
   id: string,
   data: {
     photoUrl: string;
     signatureUrl: string;
+    videoUrl?: string;
     deliveryLat: number;
     deliveryLng: number;
     deliveryNotes?: string;
+    extraPhotoUrls?: string[];
+    rating: number;
   }
 ): Promise<Delivery> {
   const response = await api.put(`/api/deliveries/${id}/complete`, data);
   return response.data.data;
 }
 
+export async function getDeliveryRoute(
+  id: string,
+  params?: { limit?: number; fromDate?: string; toDate?: string }
+): Promise<DeliveryRouteResponse> {
+  const response = await api.get(`/api/deliveries/${id}/route`, { params });
+  return response.data.data;
+}
+
 export interface SyncData {
-  deliveries: Array<{
+  deliveries: {
     localId: string;
     serverId?: string;
     status: Delivery['status'];
@@ -94,15 +127,15 @@ export interface SyncData {
     deliveryLng?: number;
     deliveredAt?: string;
     deliveryNotes?: string;
-  }>;
-  locations?: Array<{
+  }[];
+  locations?: {
     lat: number;
     lng: number;
     accuracy?: number;
     speed?: number;
     battery?: number;
     recordedAt?: string;
-  }>;
+  }[];
 }
 
 export async function syncDeliveries(data: SyncData): Promise<{

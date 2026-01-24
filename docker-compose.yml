@@ -18,6 +18,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # MQTT Broker (EMQX) for real-time courier tracking
+  emqx:
+    image: emqx/emqx:5.6
+    container_name: certilog-emqx
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT TCP
+      - "8083:8083"   # MQTT over WebSocket
+      - "18083:18083" # EMQX dashboard
+    environment:
+      # Keep dev friction low; lock down in production (disable anonymous + ACL/mTLS)
+      - EMQX_ALLOW_ANONYMOUS=true
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=admin
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=certilog-emqx-admin
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # API (optional - can run locally for development)
   api:
     build:
@@ -29,16 +49,22 @@ services:
       - "2120:3001"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/certilog?schema=public
-      - NODE_ENV=production
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:19000,http://localhost:19006,http://localhost:8081,http://192.168.40.52:19006,http://192.168.40.52:3000
+      - NODE_ENV=development
+      - UPLOADS_DIR=/app/uploads
+      - CORS_ORIGIN=*
       - JWT_SECRET=certilog-dev-secret-key-change-in-production
       - JWT_REFRESH_SECRET=certilog-dev-refresh-secret-change-in-production
+      - MQTT_URL=mqtt://emqx:1883
+      - MQTT_TOPIC_PREFIX=couriers
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
     depends_on:
       postgres:
         condition: service_healthy
-    # Optional: mount source for development instead of building
-    # volumes:
-    #   - ./apps/api:/app/apps/api:delegated
+      emqx:
+        condition: service_healthy
+    volumes:
+      - api_uploads:/app/uploads
   # Dashboard (Next.js)
   dashboard:
     build:
@@ -58,9 +84,10 @@ services:
     depends_on:
       - api
       - postgres
-    # Optional: mount source for development instead of building
-    # volumes:
-    #   - ./apps/dashboard:/app/apps/dashboard:delegated
+    volumes:
+      - ./apps/dashboard/public/downloads:/app/apps/dashboard/public/downloads
+      - ./apps/dashboard/public/app-version.json:/app/apps/dashboard/public/app-version.json
 
 volumes:
   postgres_data:
+  api_uploads:

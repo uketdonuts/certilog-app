@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { uploadPhoto, uploadSignature } from '../controllers/upload.controller.js';
+import { uploadPhoto, uploadSignature, uploadVideo } from '../controllers/upload.controller.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { uploadSingle } from '../middleware/upload.js';
+import { uploadSingle, uploadVideoSingle } from '../middleware/upload.js';
 
 const router = Router();
 
@@ -10,5 +10,6 @@ router.use(authenticateToken);
 
 router.post('/photo', uploadSingle, uploadPhoto);
 router.post('/signature', uploadSingle, uploadSignature);
+router.post('/video', uploadVideoSingle, uploadVideo);
 
 export default router;

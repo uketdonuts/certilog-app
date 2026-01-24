@@ -8,6 +8,7 @@ import {
   ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { getDeliveryStats, getDeliveries, getCouriersLocations } from '@/lib/api';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
 
 interface Stats {
   total: number;
@@ -66,6 +67,54 @@ export default function DashboardPage() {
     }
 
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const socket = connectSocket();
+
+    const onLocation = (evt: any) => {
+      setCouriers((prev) => {
+        const list = Array.isArray(prev) ? prev.slice() : [];
+        const idx = list.findIndex((c) => c.courierId === evt.courierId);
+
+        const next = {
+          courierId: evt.courierId,
+          fullName: evt.fullName ?? (idx >= 0 ? list[idx].fullName : 'Mensajero'),
+          activeDeliveries: idx >= 0 ? list[idx].activeDeliveries : 0,
+          location: {
+            lat: evt.lat,
+            lng: evt.lng,
+            batteryLevel: evt.battery ?? null,
+            recordedAt: new Date(evt.timestamp ?? Date.now()).toISOString(),
+          },
+        };
+
+        if (idx >= 0) list[idx] = { ...list[idx], ...next };
+        else list.unshift(next);
+
+        return list;
+      });
+    };
+
+    const onOffline = (evt: any) => {
+      setCouriers((prev) => {
+        const list = Array.isArray(prev) ? prev.slice() : [];
+        const idx = list.findIndex((c) => c.courierId === evt.courierId);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], location: null };
+        }
+        return list;
+      });
+    };
+
+    socket.on('courier:location', onLocation);
+    socket.on('courier:offline', onOffline);
+
+    return () => {
+      socket.off('courier:location', onLocation);
+      socket.off('courier:offline', onOffline);
+      disconnectSocket();
+    };
   }, []);
 
   if (isLoading) {

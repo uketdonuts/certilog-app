@@ -14,17 +14,19 @@
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@certilog/shared": "*",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^2.5.0",
     "cors": "^2.8.5",
+    "expo-application": "^7.0.8",
     "express": "^4.21.0",
     "firebase-admin": "^12.7.0",
     "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.10.0",
     "multer": "^1.4.5-lts.1",
     "socket.io": "^4.8.0",
-    "zod": "^3.23.0",
-    "@certilog/shared": "*"
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

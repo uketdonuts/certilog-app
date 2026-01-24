@@ -15,12 +15,32 @@ export interface AuthResponse {
   user: User;
 }
 
+function normalizeRole(role: unknown): User['role'] {
+  const r = String(role || '').toUpperCase();
+  if (r === 'ADMIN' || r === 'DISPATCHER' || r === 'COURIER') return r;
+  return 'COURIER';
+}
+
+function normalizeUser(user: any): User {
+  return {
+    id: String(user?.id || ''),
+    fullName: String(user?.fullName || ''),
+    phone: user?.phone ?? null,
+    role: normalizeRole(user?.role),
+    isActive: Boolean(user?.isActive ?? true),
+  };
+}
+
 export async function loginWithCredentials(
   username: string,
   password: string
 ): Promise<AuthResponse> {
   const response = await api.post('/api/auth/login', { username, password });
-  const data = response.data.data as AuthResponse;
+  const raw = response.data.data as AuthResponse;
+  const data: AuthResponse = {
+    ...raw,
+    user: normalizeUser((raw as any).user),
+  };
 
   await Storage.setItemAsync('accessToken', data.token);
   await Storage.setItemAsync('refreshToken', data.refreshToken);
@@ -31,7 +51,11 @@ export async function loginWithCredentials(
 
 export async function loginWithPin(pin: string): Promise<AuthResponse> {
   const response = await api.post('/api/auth/login-pin', { pin });
-  const data = response.data.data as AuthResponse;
+  const raw = response.data.data as AuthResponse;
+  const data: AuthResponse = {
+    ...raw,
+    user: normalizeUser((raw as any).user),
+  };
 
   await Storage.setItemAsync('accessToken', data.token);
   await Storage.setItemAsync('refreshToken', data.refreshToken);
@@ -58,7 +82,7 @@ export async function logout(): Promise<void> {
 export async function getStoredUser(): Promise<User | null> {
   const userStr = await Storage.getItemAsync('user');
   if (!userStr) return null;
-  return JSON.parse(userStr);
+  return normalizeUser(JSON.parse(userStr));
 }
 
 export async function getStoredToken(): Promise<string | null> {

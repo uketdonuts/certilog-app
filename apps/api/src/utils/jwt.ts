@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import crypto from 'crypto';
 
@@ -8,8 +8,9 @@ export interface TokenPayload {
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '15m') as SignOptions['expiresIn'];
   return jwt.sign(payload, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+    expiresIn,
   });
 }
 

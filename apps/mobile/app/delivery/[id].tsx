@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getDeliveryById, Delivery, updateDeliveryStatus } from '@/lib/api/deliveries';
+import { getDeliveryById, Delivery, startDelivery } from '@/lib/api/deliveries';
 import { openWhatsApp, callPhone } from '@/lib/services/whatsapp';
 import { openMapsNavigation } from '@/lib/services/location';
+import { useAuth } from '@/lib/context/AuthContext';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: '#FFA500',
@@ -32,6 +33,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function DeliveryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user, refreshTracking } = useAuth();
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -58,12 +60,17 @@ export default function DeliveryDetailScreen() {
 
     setIsUpdating(true);
     try {
-      const updated = await updateDeliveryStatus(delivery.id, 'IN_TRANSIT');
+      const updated = await startDelivery(delivery.id);
       setDelivery(updated);
-      Alert.alert('Éxito', 'Entrega iniciada');
+
+      // Trigger tracking check - will start tracking since delivery is now IN_TRANSIT
+      refreshTracking();
+
+      Alert.alert('Éxito', 'Entrega iniciada. Tu ubicación se está compartiendo.');
     } catch (error) {
       console.error('Error starting delivery:', error);
-      Alert.alert('Error', 'No se pudo iniciar la entrega');
+      const msg = (error as any)?.response?.data?.error;
+      Alert.alert('Error', msg || 'No se pudo iniciar la entrega');
     } finally {
       setIsUpdating(false);
     }
@@ -84,6 +91,10 @@ export default function DeliveryDetailScreen() {
       Number(delivery.customer.longitude),
       delivery.customer.name
     );
+  };
+
+  const handleViewRoute = () => {
+    router.push((`/delivery/route/${id}`) as any);
   };
 
   const handleWhatsApp = () => {
@@ -122,6 +133,7 @@ export default function DeliveryDetailScreen() {
   const canStart = delivery.status === 'ASSIGNED';
   const canComplete = delivery.status === 'IN_TRANSIT';
   const isCompleted = delivery.status === 'DELIVERED';
+  const isCourier = user?.role === 'COURIER';
 
   return (
     <View style={styles.container}>
@@ -183,6 +195,21 @@ export default function DeliveryDetailScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Route */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ruta</Text>
+          <TouchableOpacity style={styles.routeCard} onPress={handleViewRoute}>
+            <View style={styles.routeRow}>
+              <Ionicons name="map" size={22} color="#3B82F6" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.routeTitle}>Ver ruta de la entrega</Text>
+                <Text style={styles.routeSub}>Puntos registrados durante el recorrido</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Package Details */}
         {(delivery.description || delivery.packageDetails) && (
           <View style={styles.section}>
@@ -219,7 +246,7 @@ export default function DeliveryDetailScreen() {
       </ScrollView>
 
       {/* Action Buttons */}
-      {!isCompleted && (
+      {!isCompleted && isCourier && (
         <View style={styles.actionContainer}>
           {canStart && (
             <TouchableOpacity
@@ -337,6 +364,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
+  },
+  routeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  routeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  routeSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   addressInfo: {
     flexDirection: 'row',

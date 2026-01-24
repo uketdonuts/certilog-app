@@ -1,18 +1,41 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
+  EyeIcon,
+  XMarkIcon,
+  MapPinIcon,
+  PhotoIcon,
+  PencilSquareIcon,
+  ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
+  DocumentTextIcon,
+  StarIcon,
+  VideoCameraIcon,
 } from '@heroicons/react/24/outline';
 import {
   getDeliveries,
+  getDeliveryById,
+  getDeliveryRoute,
   getCouriers,
   getCustomers,
   createDelivery,
   assignDelivery,
+  importDeliveriesFromExcel,
+  downloadImportTemplate,
 } from '@/lib/api';
+
+const DeliveryRouteMap = dynamic(() => import('../map/DeliveryRouteMapClient'), { ssr: false });
+
+interface DeliveryPhoto {
+  id: string;
+  url: string;
+  createdAt: string;
+}
 
 interface Delivery {
   id: string;
@@ -25,6 +48,8 @@ interface Delivery {
     name: string;
     phone: string;
     address: string;
+    latitude?: number;
+    longitude?: number;
   };
   courier?: {
     id: string;
@@ -33,6 +58,14 @@ interface Delivery {
   };
   createdAt: string;
   deliveredAt: string | null;
+  photoUrl?: string;
+  signatureUrl?: string;
+  videoUrl?: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  deliveryNotes?: string;
+  rating?: number;
+  photos?: DeliveryPhoto[];
 }
 
 interface Courier {
@@ -57,6 +90,19 @@ export default function DeliveriesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState<Delivery | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState<Delivery | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [routePoints, setRoutePoints] = useState<Array<{ lat: number; lng: number; recordedAt: string }>>([]);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    deliveriesCreated: number;
+    customersCreated: number;
+    totalRows: number;
+    errors: string[];
+  } | null>(null);
 
   // New delivery form
   const [newDelivery, setNewDelivery] = useState({
@@ -69,6 +115,34 @@ export default function DeliveriesPage() {
   useEffect(() => {
     fetchData();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchRoute() {
+      if (!showDetailsModal?.id) {
+        setRoutePoints([]);
+        setRouteLoading(false);
+        return;
+      }
+
+      setRouteLoading(true);
+      try {
+        const route = await getDeliveryRoute(showDetailsModal.id, { limit: 10000 });
+        const points = Array.isArray(route?.points) ? route.points : [];
+        if (!cancelled) setRoutePoints(points);
+      } catch {
+        if (!cancelled) setRoutePoints([]);
+      } finally {
+        if (!cancelled) setRouteLoading(false);
+      }
+    }
+
+    fetchRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [showDetailsModal?.id]);
 
   async function fetchData() {
     try {
@@ -102,7 +176,8 @@ export default function DeliveriesPage() {
       fetchData();
     } catch (error) {
       console.error('Error creating delivery:', error);
-      alert('Error al crear la entrega');
+      const msg = (error as any)?.response?.data?.error;
+      alert(msg || 'Error al crear la entrega');
     }
   }
 
@@ -114,8 +189,63 @@ export default function DeliveriesPage() {
       fetchData();
     } catch (error) {
       console.error('Error assigning delivery:', error);
-      alert('Error al asignar la entrega');
+      const msg = (error as any)?.response?.data?.error;
+      alert(msg || 'Error al asignar la entrega');
     }
+  }
+
+  async function handleViewDetails(delivery: Delivery) {
+    setLoadingDetails(true);
+    try {
+      const details = await getDeliveryById(delivery.id);
+      setShowDetailsModal(details);
+    } catch (error) {
+      console.error('Error fetching delivery details:', error);
+      alert('Error al cargar los detalles de la entrega');
+    } finally {
+      setLoadingDetails(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const result = await importDeliveriesFromExcel(importFile);
+      setImportResult(result);
+      if (result.deliveriesCreated > 0) {
+        fetchData(); // Refresh deliveries list
+      }
+    } catch (error) {
+      console.error('Error importing deliveries:', error);
+      alert('Error al importar entregas');
+    } finally {
+      setImportLoading(false);
+    }
+  }
+
+  async function handleDownloadTemplate() {
+    try {
+      await downloadImportTemplate();
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      alert('Error al descargar plantilla');
+    }
+  }
+
+  function handleCloseImportModal() {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportResult(null);
+  }
+
+  // Build the full URL for photos (API base URL + relative path)
+  const getPhotoUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:2120';
+    return `${apiUrl}${url}`;
   }
 
   const statusColors: Record<string, string> = {
@@ -146,13 +276,22 @@ export default function DeliveriesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Entregas</h1>
-        <button
-          onClick={() => setShowNewModal(true)}
-          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
-        >
-          <PlusIcon className="h-5 w-5" />
-          Nueva Entrega
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+          >
+            <ArrowUpTrayIcon className="h-5 w-5" />
+            Importar Excel
+          </button>
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
+          >
+            <PlusIcon className="h-5 w-5" />
+            Nueva Entrega
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -254,15 +393,26 @@ export default function DeliveriesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {(delivery.status === 'PENDING' ||
-                      delivery.status === 'ASSIGNED') && (
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => setShowAssignModal(delivery)}
-                        className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                        onClick={() => handleViewDetails(delivery)}
+                        disabled={loadingDetails}
+                        className="text-gray-600 hover:text-gray-800 text-sm font-medium flex items-center gap-1"
+                        title="Ver detalles"
                       >
-                        {delivery.courier ? 'Reasignar' : 'Asignar'}
+                        <EyeIcon className="h-4 w-4" />
+                        Ver
                       </button>
-                    )}
+                      {(delivery.status === 'PENDING' ||
+                        delivery.status === 'ASSIGNED') && (
+                        <button
+                          onClick={() => setShowAssignModal(delivery)}
+                          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                        >
+                          {delivery.courier ? 'Reasignar' : 'Asignar'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -434,6 +584,431 @@ export default function DeliveriesPage() {
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Details Modal */}
+      {showDetailsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 py-8">
+            <div
+              className="fixed inset-0 bg-gray-900/50"
+              onClick={() => setShowDetailsModal(null)}
+            />
+            <div className="relative bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Detalles de Entrega
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {showDetailsModal.trackingCode}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowDetailsModal(null)}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XMarkIcon className="h-5 w-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Status and Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Estado</h3>
+                      <span
+                        className={`px-3 py-1 text-sm font-medium rounded-full ${
+                          statusColors[showDetailsModal.status]
+                        }`}
+                      >
+                        {statusLabels[showDetailsModal.status]}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Prioridad</h3>
+                      <span className={`text-sm font-medium ${priorityColors[showDetailsModal.priority]}`}>
+                        {showDetailsModal.priority}
+                      </span>
+                    </div>
+                    {showDetailsModal.description && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">Descripción</h3>
+                        <p className="text-gray-900">{showDetailsModal.description}</p>
+                      </div>
+                    )}
+                    {showDetailsModal.deliveredAt && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">Entregado</h3>
+                        <p className="text-gray-900">
+                          {new Date(showDetailsModal.deliveredAt).toLocaleString('es-ES')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Cliente</h3>
+                      <p className="text-gray-900 font-medium">{showDetailsModal.customer.name}</p>
+                      <p className="text-sm text-gray-600">{showDetailsModal.customer.phone}</p>
+                      <p className="text-sm text-gray-600">{showDetailsModal.customer.address}</p>
+                    </div>
+                    {showDetailsModal.courier && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-1">Mensajero</h3>
+                        <p className="text-gray-900 font-medium">{showDetailsModal.courier.fullName}</p>
+                        <p className="text-sm text-gray-600">{showDetailsModal.courier.phone}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Notes */}
+                {showDetailsModal.deliveryNotes && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <PencilSquareIcon className="h-4 w-4" />
+                      Notas de Entrega
+                    </h3>
+                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                      {showDetailsModal.deliveryNotes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Location */}
+                {(showDetailsModal.deliveryLat != null && showDetailsModal.deliveryLng != null) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <MapPinIcon className="h-4 w-4" />
+                      Ubicación de Entrega
+                    </h3>
+                    <div className="bg-gray-100 rounded-lg overflow-hidden">
+                      <a
+                        href={`https://www.google.com/maps?q=${showDetailsModal.deliveryLat},${showDetailsModal.deliveryLng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-4 hover:bg-gray-200 transition"
+                      >
+                        <div className="flex items-center gap-2 text-primary-600">
+                          <MapPinIcon className="h-5 w-5" />
+                          <span>Ver en Google Maps</span>
+                        </div>
+                        {
+                          (() => {
+                            const lat = Number(showDetailsModal.deliveryLat as any);
+                            const lng = Number(showDetailsModal.deliveryLng as any);
+                            const latStr = Number.isFinite(lat) ? lat.toFixed(6) : '—';
+                            const lngStr = Number.isFinite(lng) ? lng.toFixed(6) : '—';
+                            return (
+                              <p className="text-sm text-gray-500 mt-1">{latStr}, {lngStr}</p>
+                            );
+                          })()
+                        }
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Route */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                    <MapPinIcon className="h-4 w-4" />
+                    Ruta realizada
+                  </h3>
+
+                  {routeLoading ? (
+                    <div className="flex items-center justify-center h-72 bg-gray-50 rounded-lg">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+                    </div>
+                  ) : routePoints.length > 0 ? (
+                    <DeliveryRouteMap
+                      points={routePoints}
+                      destination={
+                        showDetailsModal.deliveryLat != null && showDetailsModal.deliveryLng != null
+                          ? {
+                              lat: Number(showDetailsModal.deliveryLat as any),
+                              lng: Number(showDetailsModal.deliveryLng as any),
+                              label: 'Entrega',
+                            }
+                          : showDetailsModal.customer.latitude != null && showDetailsModal.customer.longitude != null
+                            ? {
+                                lat: Number(showDetailsModal.customer.latitude as any),
+                                lng: Number(showDetailsModal.customer.longitude as any),
+                                label: 'Cliente',
+                              }
+                            : null
+                      }
+                    />
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+                      No hay ruta registrada para esta entrega (aún).
+                    </div>
+                  )}
+                </div>
+
+                {/* Signature */}
+                {showDetailsModal.signatureUrl && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <PencilSquareIcon className="h-4 w-4" />
+                      Firma del Receptor
+                    </h3>
+                    <div className="bg-white border rounded-lg p-4 inline-block">
+                      <img
+                        src={getPhotoUrl(showDetailsModal.signatureUrl)}
+                        alt="Firma del receptor"
+                        className="max-h-32 object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Photos */}
+                {(showDetailsModal.photoUrl || (showDetailsModal.photos && showDetailsModal.photos.length > 0)) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <PhotoIcon className="h-4 w-4" />
+                      Fotos de Entrega
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {showDetailsModal.photoUrl && (
+                        <a
+                          href={getPhotoUrl(showDetailsModal.photoUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={getPhotoUrl(showDetailsModal.photoUrl)}
+                            alt="Foto de entrega"
+                            className="w-full h-48 object-cover rounded-lg hover:opacity-90 transition"
+                          />
+                        </a>
+                      )}
+                      {showDetailsModal.photos?.map((photo) => (
+                        <a
+                          key={photo.id}
+                          href={getPhotoUrl(photo.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img
+                            src={getPhotoUrl(photo.url)}
+                            alt="Foto de entrega"
+                            className="w-full h-48 object-cover rounded-lg hover:opacity-90 transition"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rating */}
+                {showDetailsModal.rating != null && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <StarIcon className="h-4 w-4" />
+                      Calificación
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {Array.from({ length: 10 }).map((_, i) => (
+                        <StarIcon
+                          key={i}
+                          className={`h-5 w-5 ${
+                            i < (showDetailsModal.rating || 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                      <span className="ml-2 text-lg font-semibold text-yellow-600">
+                        {showDetailsModal.rating}/10
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Video */}
+                {showDetailsModal.videoUrl && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <VideoCameraIcon className="h-4 w-4" />
+                      Video de Entrega
+                    </h3>
+                    <video
+                      src={getPhotoUrl(showDetailsModal.videoUrl)}
+                      controls
+                      className="w-full max-w-md rounded-lg"
+                    />
+                  </div>
+                )}
+
+                {/* No proof message for non-delivered */}
+                {showDetailsModal.status !== 'DELIVERED' && (
+                  <div className="text-center py-8 text-gray-500">
+                    <PhotoIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>Las fotos, firma y ubicación estarán disponibles cuando se complete la entrega.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div
+              className="fixed inset-0 bg-gray-900/50"
+              onClick={handleCloseImportModal}
+            />
+            <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Importar Entregas desde Excel
+                </h2>
+                <button
+                  onClick={handleCloseImportModal}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XMarkIcon className="h-5 w-5 text-gray-500" />
+                </button>
+              </div>
+
+              {!importResult ? (
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <DocumentTextIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="excel-file"
+                    />
+                    <label
+                      htmlFor="excel-file"
+                      className="cursor-pointer"
+                    >
+                      {importFile ? (
+                        <div>
+                          <p className="text-gray-900 font-medium">{importFile.name}</p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Clic para cambiar archivo
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-gray-600">
+                            Arrastra un archivo Excel aquí o{' '}
+                            <span className="text-primary-600 font-medium">haz clic para seleccionar</span>
+                          </p>
+                          <p className="text-sm text-gray-500 mt-2">
+                            Formatos: XLSX, XLS, CSV
+                          </p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="w-full flex items-center justify-center gap-2 text-primary-600 hover:text-primary-700 py-2"
+                  >
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    Descargar plantilla de ejemplo
+                  </button>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">Columnas requeridas:</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• <strong>nombre</strong> - Nombre del cliente</li>
+                      <li>• <strong>telefono</strong> - Teléfono del cliente</li>
+                      <li>• <strong>direccion</strong> - Dirección de entrega</li>
+                    </ul>
+                    <h4 className="text-sm font-medium text-blue-800 mt-3 mb-2">Columnas opcionales:</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• email, latitud, longitud, notas</li>
+                      <li>• descripcion, detalles_paquete, prioridad</li>
+                      <li>• mensajero (nombre para asignar)</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleCloseImportModal}
+                      className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleImport}
+                      disabled={!importFile || importLoading}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {importLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          Importando...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUpTrayIcon className="h-5 w-5" />
+                          Importar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-lg ${importResult.errors.length > 0 ? 'bg-yellow-50' : 'bg-green-50'}`}>
+                    <h3 className={`font-medium ${importResult.errors.length > 0 ? 'text-yellow-800' : 'text-green-800'}`}>
+                      Importación completada
+                    </h3>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <p className="text-gray-700">
+                        <strong>{importResult.deliveriesCreated}</strong> entregas creadas
+                      </p>
+                      <p className="text-gray-700">
+                        <strong>{importResult.customersCreated}</strong> clientes nuevos creados
+                      </p>
+                      <p className="text-gray-700">
+                        <strong>{importResult.totalRows}</strong> filas procesadas
+                      </p>
+                    </div>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-red-800 mb-2">
+                        Errores ({importResult.errors.length}):
+                      </h4>
+                      <ul className="text-sm text-red-700 space-y-1 max-h-40 overflow-y-auto">
+                        {importResult.errors.map((error, i) => (
+                          <li key={i}>• {error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCloseImportModal}
+                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

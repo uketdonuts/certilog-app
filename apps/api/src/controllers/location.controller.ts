@@ -14,6 +14,13 @@ export async function addLocationBatch(req: AuthRequest, res: Response): Promise
     const { locations } = validation.data;
     const courierId = req.user!.userId;
 
+    // If courier has exactly one IN_TRANSIT delivery, attach route points to it.
+    // (We enforce 1 active delivery elsewhere, but keep this robust.)
+    const activeDelivery = await prisma.delivery.findFirst({
+      where: { courierId, status: 'IN_TRANSIT' },
+      select: { id: true },
+    });
+
     if (locations.length === 0) {
       res.json({ success: true, data: { added: 0 } });
       return;
@@ -31,7 +38,22 @@ export async function addLocationBatch(req: AuthRequest, res: Response): Promise
       })),
     });
 
-    res.json({ success: true, data: { added: locations.length } });
+    if (activeDelivery) {
+      await prisma.deliveryRoutePoint.createMany({
+        data: locations.map((loc) => ({
+          deliveryId: activeDelivery.id,
+          courierId,
+          latitude: loc.lat,
+          longitude: loc.lng,
+          accuracy: loc.accuracy,
+          speed: loc.speed,
+          batteryLevel: loc.battery,
+          recordedAt: loc.recordedAt ? new Date(loc.recordedAt) : new Date(),
+        })),
+      });
+    }
+
+    res.json({ success: true, data: { added: locations.length, deliveryId: activeDelivery?.id ?? null } });
   } catch (error) {
     console.error('Add location batch error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
@@ -106,7 +128,7 @@ export async function getCouriersLocations(req: Request, res: Response): Promise
 
 export async function getCourierLocationHistory(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { page, limit } = paginationSchema.parse(req.query);
     const skip = (page - 1) * limit;
 

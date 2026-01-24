@@ -34,3 +34,51 @@ export const uploadMultiple = multer({
     files: 5,
   },
 }).array('files', 5);
+
+// Video file filter
+const videoFileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Solo se permiten videos (MP4, MOV, AVI)'));
+  }
+};
+
+// Max video size: 50MB
+const maxVideoSize = 50 * 1024 * 1024;
+
+export const uploadVideoSingle = multer({
+  storage,
+  fileFilter: videoFileFilter,
+  limits: {
+    fileSize: maxVideoSize,
+  },
+}).single('file');
+
+// Excel file filter
+const excelFileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const allowedMimes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel', // .xls
+    'text/csv', // .csv
+  ];
+
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Solo se permiten archivos Excel (XLSX, XLS) o CSV'));
+  }
+};
+
+// Max Excel size: 5MB
+const maxExcelSize = 5 * 1024 * 1024;
+
+export const uploadExcel = multer({
+  storage,
+  fileFilter: excelFileFilter,
+  limits: {
+    fileSize: maxExcelSize,
+  },
+}).single('file');

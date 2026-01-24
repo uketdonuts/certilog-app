@@ -16,12 +16,12 @@ router.use(authenticateToken);
 
 // Admin only routes
 router.get('/', requireAdminOrDispatcher, getUsers);
-router.delete('/:id', requireAdmin, deleteUser);
+router.delete('/:id', requireAdminOrDispatcher, deleteUser);
 
 // Admin or self
 router.get('/couriers', requireAdminOrDispatcher, getCouriers);
 router.get('/:id', getUserById);
-router.put('/:id', requireAdmin, updateUser);
+router.put('/:id', requireAdminOrDispatcher, updateUser);
 router.put('/:id/fcm-token', updateFcmToken);
 
 export default router;

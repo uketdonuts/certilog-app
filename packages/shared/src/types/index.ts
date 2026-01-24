@@ -96,6 +96,7 @@ export interface DeliveryComplete {
   deliveryLat: number;
   deliveryLng: number;
   deliveryNotes?: string;
+  extraPhotoUrls?: string[];
 }
 
 // Location types

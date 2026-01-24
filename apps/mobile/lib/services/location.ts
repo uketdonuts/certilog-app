@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import * as Linking from 'expo-linking';
 
 export interface LocationCoords {
   latitude: number;
@@ -67,6 +68,5 @@ export async function watchPosition(
 
 export function openMapsNavigation(latitude: number, longitude: number, label?: string): void {
   const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}${label ? `&destination_place_id=${encodeURIComponent(label)}` : ''}`;
-  // Use Linking from expo-linking
-  import('expo-linking').then(({ openURL }) => openURL(url));
+  void Linking.openURL(url);
 }

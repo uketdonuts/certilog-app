@@ -108,6 +108,19 @@ export async function getDeliveries(params?: {
   return response.data.data;
 }
 
+export async function getDeliveryById(id: string) {
+  const response = await api.get(`/api/deliveries/${id}`);
+  return response.data.data;
+}
+
+export async function getDeliveryRoute(
+  id: string,
+  params?: { limit?: number; fromDate?: string; toDate?: string }
+): Promise<{ deliveryId: string; points: Array<{ id: string; lat: number; lng: number; recordedAt: string }> }> {
+  const response = await api.get(`/api/deliveries/${id}/route`, { params });
+  return response.data.data;
+}
+
 export async function getDeliveryStats() {
   const response = await api.get('/api/deliveries/stats');
   return response.data.data;
@@ -178,8 +191,88 @@ export async function getCouriers() {
   return response.data.data;
 }
 
+// Users (admin / dispatcher)
+export async function getUsers(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/users', { params });
+  return response.data.data;
+}
+
+export async function getUserById(id: string) {
+  const response = await api.get(`/api/users/${id}`);
+  return response.data.data;
+}
+
+export async function updateUser(id: string, data: Record<string, unknown>) {
+  const response = await api.put(`/api/users/${id}`, data);
+  return response.data.data;
+}
+
+export async function deactivateUser(id: string) {
+  await api.delete(`/api/users/${id}`);
+}
+
+export async function createUser(data: {
+  email?: string;
+  username?: string;
+  password?: string;
+  pin?: string;
+  fullName: string;
+  phone?: string;
+  role?: string;
+}) {
+  // Registration endpoint is under /api/auth/register and requires admin token
+  const response = await api.post('/api/auth/register', data);
+  return response.data.data;
+}
+
 // Locations
 export async function getCouriersLocations() {
   const response = await api.get('/api/locations/couriers');
   return response.data.data;
+}
+
+export async function getCourierLocationHistory(
+  courierId: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    fromDate?: string;
+    toDate?: string;
+  }
+) {
+  const response = await api.get(`/api/locations/courier/${courierId}/history`, { params });
+  return response.data.data;
+}
+
+// Import
+export async function importDeliveriesFromExcel(file: File): Promise<{
+  deliveriesCreated: number;
+  customersCreated: number;
+  totalRows: number;
+  errors: string[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await api.post('/api/import/deliveries', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data.data;
+}
+
+export async function downloadImportTemplate(): Promise<void> {
+  const response = await api.get('/api/import/template', {
+    responseType: 'blob',
+  });
+
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'plantilla_entregas.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }

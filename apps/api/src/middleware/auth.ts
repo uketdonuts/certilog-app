@@ -62,3 +62,26 @@ export function requireAdminOrDispatcher(req: AuthRequest, res: Response, next: 
 export function requireCourier(req: AuthRequest, res: Response, next: NextFunction): void {
   requireRoles(Role.COURIER)(req, res, next);
 }
+
+// Optional auth - doesn't require token but will parse it if present
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+        userId: string;
+        role: Role;
+      };
+      req.user = {
+        userId: decoded.userId,
+        role: decoded.role,
+      };
+    } catch {
+      // Token invalid, continue without user
+    }
+  }
+
+  next();
+}

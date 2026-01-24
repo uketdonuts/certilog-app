@@ -4,7 +4,11 @@ import { createCustomerSchema, updateCustomerSchema, paginationSchema } from '..
 
 export async function getCustomers(req: Request, res: Response): Promise<void> {
   try {
-    const { page, limit } = paginationSchema.parse(req.query);
+    const parsed = paginationSchema.safeParse(req.query);
+    if (!parsed.success) {
+      console.warn('Invalid pagination params, falling back to defaults', parsed.error.errors);
+    }
+    const { page, limit } = parsed.success ? parsed.data : { page: 1, limit: 20 };
     const skip = (page - 1) * limit;
     const search = req.query.search as string | undefined;
 
@@ -51,7 +55,7 @@ export async function getCustomers(req: Request, res: Response): Promise<void> {
 
 export async function getCustomerById(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const customer = await prisma.customer.findUnique({
       where: { id },
@@ -106,7 +110,7 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
 
 export async function updateCustomer(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const validation = updateCustomerSchema.safeParse(req.body);
     if (!validation.success) {
@@ -137,7 +141,7 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
 
 export async function deleteCustomer(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const customer = await prisma.customer.findUnique({
       where: { id },

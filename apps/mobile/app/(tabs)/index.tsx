@@ -246,21 +246,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 8,
   },
   trackingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   trackingCode: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
     marginRight: 8,
+    flexShrink: 1,
   },
   priorityBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
   priorityText: {
     fontSize: 10,
@@ -270,6 +276,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    flexShrink: 0,
   },
   statusText: {
     color: '#fff',

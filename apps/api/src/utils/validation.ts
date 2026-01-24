@@ -80,11 +80,14 @@ export const assignDeliverySchema = z.object({
 });
 
 export const completeDeliverySchema = z.object({
-  photoUrl: z.string().url(),
-  signatureUrl: z.string().url(),
+  photoUrl: z.string().min(1),
+  signatureUrl: z.string().min(1),
+  videoUrl: z.string().min(1).optional(),
   deliveryLat: z.number().min(-90).max(90),
   deliveryLng: z.number().min(-180).max(180),
   deliveryNotes: z.string().max(500).optional(),
+  extraPhotoUrls: z.array(z.string().min(1)).optional(),
+  rating: z.number().int().min(1).max(10),
 });
 
 // Location schemas
@@ -105,8 +108,8 @@ export const syncSchema = z.object({
     localId: z.string(),
     serverId: z.string().uuid().optional(),
     status: z.nativeEnum(DeliveryStatus),
-    photoUrl: z.string().url().optional(),
-    signatureUrl: z.string().url().optional(),
+    photoUrl: z.string().min(1).optional(),
+    signatureUrl: z.string().min(1).optional(),
     deliveryLat: z.number().optional(),
     deliveryLng: z.number().optional(),
     deliveredAt: z.string().datetime().optional(),

@@ -11,7 +11,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { useAuth } from '@/lib/context/AuthContext';
+import { getStoredUser } from '@/lib/api/auth';
+import logger from '@/lib/services/logger';
+
+const APP_VERSION = Application.nativeApplicationVersion || Constants.expoConfig?.version || '1.0.0';
+
+// Cross-platform alert that works on web
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}: ${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 
 type LoginMode = 'pin' | 'credentials';
 
@@ -25,17 +40,27 @@ export default function LoginScreen() {
 
   const handlePinLogin = async () => {
     if (pin.length < 4) {
-      Alert.alert('Error', 'El PIN debe tener al menos 4 dígitos');
+      showAlert('Error', 'El PIN debe tener al menos 4 dígitos');
       return;
     }
 
     setIsLoading(true);
     try {
+      logger.info('Attempting PIN login', { pinLength: pin.length });
       await loginPin(pin);
-      router.replace('/(tabs)');
+      logger.info('PIN login successful');
+      const u = await getStoredUser();
+      router.replace((u?.role === 'COURIER' ? '/(tabs)' : '/(dispatcher-tabs)') as any);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'PIN incorrecto';
-      Alert.alert('Error', message);
+      logger.error('PIN login failed', error, { pinLength: pin.length });
+      let message = 'PIN incorrecto';
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string } } };
+        message = axiosError.response?.data?.error || message;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+      showAlert('Error', message);
     } finally {
       setIsLoading(false);
     }
@@ -43,17 +68,27 @@ export default function LoginScreen() {
 
   const handleCredentialsLogin = async () => {
     if (!username || !password) {
-      Alert.alert('Error', 'Por favor ingresa usuario y contraseña');
+      showAlert('Error', 'Por favor ingresa usuario y contraseña');
       return;
     }
 
     setIsLoading(true);
     try {
+      logger.info('Attempting credentials login', { username });
       await login(username, password);
-      router.replace('/(tabs)');
+      logger.info('Credentials login successful', { username });
+      const u = await getStoredUser();
+      router.replace((u?.role === 'COURIER' ? '/(tabs)' : '/(dispatcher-tabs)') as any);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Credenciales incorrectas';
-      Alert.alert('Error', message);
+      logger.error('Credentials login failed', error, { username });
+      let message = 'Credenciales incorrectas';
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string } } };
+        message = axiosError.response?.data?.error || message;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+      showAlert('Error', message);
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +112,7 @@ export default function LoginScreen() {
       <View style={styles.header}>
         <Text style={styles.logo}>CertiLog</Text>
         <Text style={styles.subtitle}>Sistema de Entregas</Text>
+        <Text style={styles.version}>v{APP_VERSION}</Text>
       </View>
 
       <View style={styles.tabContainer}>
@@ -191,6 +227,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     marginTop: 8,
+  },
+  version: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
   },
   tabContainer: {
     flexDirection: 'row',

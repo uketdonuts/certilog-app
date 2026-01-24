@@ -136,9 +136,9 @@ export async function loginWithPin(req: Request, res: Response): Promise<void> {
 
 export async function register(req: AuthRequest, res: Response): Promise<void> {
   try {
-    // Only admins can register new users
-    if (req.user?.role !== Role.ADMIN) {
-      res.status(403).json({ success: false, error: 'Solo administradores pueden registrar usuarios' });
+    // Admins and dispatchers can register new users
+    if (req.user?.role !== Role.ADMIN && req.user?.role !== Role.DISPATCHER) {
+      res.status(403).json({ success: false, error: 'Solo administradores o dispatchers pueden registrar usuarios' });
       return;
     }
 
@@ -149,6 +149,12 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
     }
 
     const { email, username, password, pin, fullName, phone, role } = validation.data;
+
+    // Dispatchers cannot create ADMIN users
+    if (req.user?.role === Role.DISPATCHER && role === Role.ADMIN) {
+      res.status(403).json({ success: false, error: 'No tienes permiso para crear usuarios ADMIN' });
+      return;
+    }
 
     // Check if email or username already exists
     if (email || username) {

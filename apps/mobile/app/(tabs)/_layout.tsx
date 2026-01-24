@@ -1,7 +1,15 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Redirect } from 'expo-router';
+import { useAuth } from '@/lib/context/AuthContext';
 
 export default function TabsLayout() {
+  const { user } = useAuth();
+
+  if (user && user.role !== 'COURIER') {
+    return <Redirect href="/(dispatcher-tabs)" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

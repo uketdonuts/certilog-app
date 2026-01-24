@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -7,6 +7,18 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
+    // On web, `Alert.alert` doesn't render confirmation buttons reliably.
+    // Use native `confirm` to ensure the logout action runs on web.
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('¿Estás seguro que deseas cerrar sesión?');
+      if (!confirmed) return;
+      (async () => {
+        await logout();
+        router.replace('/(auth)/login');
+      })();
+      return;
+    }
+
     Alert.alert(
       'Cerrar sesión',
       '¿Estás seguro que deseas cerrar sesión?',

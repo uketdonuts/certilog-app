@@ -1,7 +1,14 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import * as Storage from '../storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:2120';
+// Determine API URL with precedence:
+// 1. `EXPO_PUBLIC_API_URL` env var (useful for overriding in development)
+// 2. For web: dev tunnel (previous default)
+// 3. For native: localhost
+const API_URL = process.env.EXPO_PUBLIC_API_URL
+  || (Platform.OS === 'web' ? 'https://jtfrcpdb-2120.use2.devtunnels.ms' : 'http://localhost:2120');
+console.log('API_URL configured:', API_URL, 'Platform:', Platform.OS);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -63,3 +70,36 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// Users (admin/dispatcher)
+export async function getUsers(page = 1, limit = 50) {
+  const response = await api.get('/api/users', { params: { page, limit } });
+  return response.data.data;
+}
+
+export async function getUserById(id: string) {
+  const response = await api.get(`/api/users/${id}`);
+  return response.data.data;
+}
+
+export async function updateUser(id: string, data: Record<string, unknown>) {
+  const response = await api.put(`/api/users/${id}`, data);
+  return response.data.data;
+}
+
+export async function deactivateUser(id: string) {
+  await api.delete(`/api/users/${id}`);
+}
+
+export async function createUser(data: {
+  email?: string;
+  username?: string;
+  password?: string;
+  pin?: string;
+  fullName: string;
+  phone?: string;
+  role?: 'ADMIN' | 'DISPATCHER' | 'COURIER';
+}) {
+  const response = await api.post('/api/auth/register', data);
+  return response.data.data;
+}

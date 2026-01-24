@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { uploadImage } from '../config/cloudinary.js';
+import { uploadImage, uploadVideo as uploadVideoFile } from '../config/storage.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 export async function uploadPhoto(req: AuthRequest, res: Response): Promise<void> {
@@ -9,13 +9,7 @@ export async function uploadPhoto(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const result = await uploadImage(req.file.buffer, 'deliveries/photos', {
-      transformation: [
-        { width: 1280, height: 1280, crop: 'limit' },
-        { quality: 'auto:good' },
-        { fetch_format: 'auto' },
-      ],
-    });
+    const result = await uploadImage(req.file.buffer, 'deliveries/photos');
 
     res.json({
       success: true,
@@ -40,12 +34,7 @@ export async function uploadSignature(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const result = await uploadImage(req.file.buffer, 'deliveries/signatures', {
-      transformation: [
-        { width: 400, height: 200, crop: 'limit' },
-        { quality: 'auto:good' },
-      ],
-    });
+    const result = await uploadImage(req.file.buffer, 'deliveries/signatures');
 
     res.json({
       success: true,
@@ -60,5 +49,30 @@ export async function uploadSignature(req: AuthRequest, res: Response): Promise<
   } catch (error) {
     console.error('Upload signature error:', error);
     res.status(500).json({ success: false, error: 'Error al subir la firma' });
+  }
+}
+
+export async function uploadVideo(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No se proporcionó ningún video' });
+      return;
+    }
+
+    const result = await uploadVideoFile(req.file.buffer, 'deliveries/videos');
+
+    res.json({
+      success: true,
+      data: {
+        url: result.url,
+        publicId: result.publicId,
+        width: result.width,
+        height: result.height,
+        bytes: result.bytes,
+      },
+    });
+  } catch (error) {
+    console.error('Upload video error:', error);
+    res.status(500).json({ success: false, error: 'Error al subir el video' });
   }
 }

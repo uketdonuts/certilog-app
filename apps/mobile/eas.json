@@ -13,8 +13,8 @@
       },
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.40.52:2120",
-        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.40.52:2120"
+        "EXPO_PUBLIC_API_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms",
+        "EXPO_PUBLIC_SOCKET_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms"
       }
     },
     "local": {
@@ -30,6 +30,10 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms",
+        "EXPO_PUBLIC_SOCKET_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms"
       }
     }
   },

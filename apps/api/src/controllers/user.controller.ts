@@ -47,7 +47,7 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
 
 export async function getUserById(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -83,7 +83,7 @@ export async function getUserById(req: Request, res: Response): Promise<void> {
 
 export async function updateUser(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const validation = updateUserSchema.safeParse(req.body);
     if (!validation.success) {
@@ -101,6 +101,21 @@ export async function updateUser(req: AuthRequest, res: Response): Promise<void>
     if (!existingUser) {
       res.status(404).json({ success: false, error: 'Usuario no encontrado' });
       return;
+    }
+
+    // Dispatcher safety rules
+    if (req.user?.role === 'DISPATCHER') {
+      // Prevent tampering with admins
+      if (existingUser.role === 'ADMIN') {
+        res.status(403).json({ success: false, error: 'No tienes permiso para modificar este usuario' });
+        return;
+      }
+
+      // Prevent role escalation to ADMIN
+      if ((data as any).role === 'ADMIN') {
+        res.status(403).json({ success: false, error: 'No tienes permiso para asignar rol ADMIN' });
+        return;
+      }
     }
 
     // Prepare update data
@@ -137,9 +152,9 @@ export async function updateUser(req: AuthRequest, res: Response): Promise<void>
   }
 }
 
-export async function deleteUser(req: Request, res: Response): Promise<void> {
+export async function deleteUser(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -148,6 +163,19 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
     if (!user) {
       res.status(404).json({ success: false, error: 'Usuario no encontrado' });
       return;
+    }
+
+    // Dispatcher safety rules
+    if (req.user?.role === 'DISPATCHER') {
+      if (req.user.userId === id) {
+        res.status(403).json({ success: false, error: 'No puedes desactivar tu propio usuario' });
+        return;
+      }
+
+      if (user.role !== 'COURIER') {
+        res.status(403).json({ success: false, error: 'Solo puedes desactivar mensajeros (COURIER)' });
+        return;
+      }
     }
 
     // Soft delete by setting isActive to false
@@ -165,7 +193,7 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
 
 export async function updateFcmToken(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     // Users can only update their own FCM token (except admins)
     if (req.user!.userId !== id && req.user!.role !== 'ADMIN') {

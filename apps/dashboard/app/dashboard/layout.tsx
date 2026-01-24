@@ -19,6 +19,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Entregas', href: '/dashboard/deliveries', icon: TruckIcon },
   { name: 'Clientes', href: '/dashboard/customers', icon: UsersIcon },
+  { name: 'Usuarios', href: '/dashboard/users', icon: Cog6ToothIcon },
   { name: 'Mapa', href: '/dashboard/map', icon: MapIcon },
 ];
 

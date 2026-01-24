@@ -3,9 +3,11 @@ import {
   getDeliveries,
   getMyDeliveries,
   getDeliveryById,
+  getDeliveryRoute,
   createDelivery,
   updateDelivery,
   assignDelivery,
+  startDelivery,
   completeDelivery,
   deleteDelivery,
   syncDeliveries,
@@ -31,7 +33,9 @@ router.put('/:id', requireAdminOrDispatcher, updateDelivery);
 router.delete('/:id', requireAdminOrDispatcher, deleteDelivery);
 
 // Both can access
+router.get('/:id/route', getDeliveryRoute);
 router.get('/:id', getDeliveryById);
+router.put('/:id/start', startDelivery);
 router.put('/:id/complete', completeDelivery);
 
 export default router;

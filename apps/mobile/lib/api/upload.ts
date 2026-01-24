@@ -43,3 +43,21 @@ export async function uploadSignature(uri: string): Promise<UploadResponse> {
 
   return response.data.data;
 }
+
+export async function uploadVideo(uri: string): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append('file', {
+    uri,
+    type: 'video/mp4',
+    name: `video_${Date.now()}.mp4`,
+  } as unknown as Blob);
+
+  const response = await api.post('/api/upload/video', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 120000, // 2 minutes for video upload
+  });
+
+  return response.data.data;
+}

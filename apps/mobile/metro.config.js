@@ -19,4 +19,21 @@ config.resolver.nodeModulesPaths = [
 // Make monorepo packages (e.g. @certilog/shared) work with Metro.
 config.watchFolders = [workspaceRoot];
 
+// Polyfills for Node.js core modules (mqtt.js needs these)
+const emptyShim = path.resolve(projectRoot, 'shims/empty.js');
+config.resolver.extraNodeModules = {
+  url: require.resolve('react-native-url-polyfill'),
+  buffer: require.resolve('buffer/'),
+  process: require.resolve('process/browser'),
+  stream: require.resolve('readable-stream'),
+  events: require.resolve('events/'),
+  // Node.js modules not available in RN - shim them out (mqtt uses WebSocket, not these)
+  dns: emptyShim,
+  net: emptyShim,
+  tls: emptyShim,
+  fs: emptyShim,
+  assert: emptyShim,
+  util: require.resolve('util/'),
+};
+
 module.exports = config;

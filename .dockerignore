@@ -11,3 +11,10 @@ build
 .vscode
 *.log
 docker-compose.override.yml
+
+# Android build artifacts (can have locked files)
+apps/mobile/android/.gradle
+apps/mobile/android/app/build
+apps/mobile/android/build
+apps/mobile/android/.idea
+apps/mobile/android/local.properties
