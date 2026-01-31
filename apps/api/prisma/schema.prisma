@@ -11,6 +11,7 @@ enum Role {
   ADMIN
   DISPATCHER
   COURIER
+  HELPER
 }
 
 enum DeliveryStatus {
@@ -40,9 +41,31 @@ model User {
   isActive     Boolean   @default(true)
   fcmToken     String?
 
+  // Additional courier/helper fields
+  firstName       String?
+  middleName      String?
+  lastName        String?
+  secondLastName  String?
+  gender          String?  // M/F
+  birthDate       DateTime?
+  personalPhone   String?  // numero personal
+  basePhone       String?  // numero de base
+  emergencyPhone  String?  // numero de emergencia
+  licensePlate    String?  // placa
+  insurancePolicy String?  // poliza de seguro
+  insurerPhone    String?  // numero de la aseguradora
+  insurerName     String?  // nombre de la aseguradora
+  nextWeightReview DateTime? // proxima revision de peso y tonelada
+
   deliveries Delivery[]
   locations  CourierLocation[]
   routePoints DeliveryRoutePoint[]
+  assignedVehicles Vehicle[] @relation("Vehicle_driver")
+  gasReports GasReport[] @relation("GasReport_reporter")
+  attendanceRecords AttendanceRecord[] @relation("Attendance_user")
+  reportedAttendance AttendanceRecord[] @relation("Attendance_reporter")
+  reportedFleetMaintenance FleetMaintenanceReport[] @relation("FleetMaintenance_reporter")
+  tireInspections TireSemaphore[] @relation("TireSemaphore_inspector")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -55,10 +78,12 @@ model Customer {
   name      String
   phone     String
   email     String?
+  cedula    String?  @unique // Panama identification number
   address   String
   latitude  Decimal? @db.Decimal(10, 8)
   longitude Decimal? @db.Decimal(11, 8)
   notes     String?
+  isActive  Boolean  @default(true)
 
   deliveries Delivery[]
 
@@ -69,14 +94,15 @@ model Customer {
 }
 
 model Delivery {
-  id           String         @id @default(uuid())
-  trackingCode String         @unique @default(cuid())
-  customerId   String
-  customer     Customer       @relation(fields: [customerId], references: [id])
-  courierId    String?
-  courier      User?          @relation(fields: [courierId], references: [id])
-  status       DeliveryStatus @default(PENDING)
-  priority     Priority       @default(NORMAL)
+  id                  String         @id @default(uuid())
+  trackingCode        String         @unique @default(cuid())
+  publicTrackingToken String?        @unique @default(cuid()) // For public tracking URL
+  customerId          String
+  customer            Customer       @relation(fields: [customerId], references: [id])
+  courierId           String?
+  courier             User?          @relation(fields: [courierId], references: [id])
+  status              DeliveryStatus @default(PENDING)
+  priority            Priority       @default(NORMAL)
 
   description    String?
   packageDetails String?
@@ -103,6 +129,7 @@ model Delivery {
   @@index([courierId, status])
   @@index([scheduledDate])
   @@index([trackingCode])
+  @@index([publicTrackingToken])
   @@map("deliveries")
 }
 
@@ -191,4 +218,167 @@ model AppLog {
   @@index([userId])
   @@index([createdAt(sort: Desc)])
   @@map("app_logs")
+}
+
+// Vehículos de la flota
+model Vehicle {
+  id           String   @id @default(uuid())
+  licensePlate String   @unique
+  make         String?
+  model        String?
+  year         Int?
+  vin          String?  @unique
+  color        String?
+  active       Boolean  @default(true)
+
+  // Relación opcional a un conductor/usuario asignado
+  driverId String?
+  driver   User?     @relation("Vehicle_driver", fields: [driverId], references: [id])
+
+  gasReports      GasReport[]
+  maintenanceReports FleetMaintenanceReport[]
+  preventiveMaintenances PreventiveMaintenance[]
+  repairs         Repair[]
+  tireChecks      TireSemaphore[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vehicles")
+}
+
+// Reportes de gasolina
+model GasReport {
+  id         String   @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  reportedBy String?  // user id
+  reporter   User?    @relation("GasReport_reporter", fields: [reportedBy], references: [id])
+  date       DateTime @default(now())
+  liters     Decimal  @db.Decimal(10, 2)
+  cost       Decimal? @db.Decimal(12, 2)
+  odometer   Int?
+  fuelType   String?
+  receiptUrl String?
+  notes      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, date])
+  @@map("gas_reports")
+}
+
+// Registro de asistencia (asistencias, ausencias, incapacidades, tardanzas, vacaciones)
+enum AttendanceType {
+  ATTENDANCE
+  ABSENCE
+  VACATION
+  DISABILITY
+  TARDY
+}
+
+model AttendanceRecord {
+  id           String         @id @default(uuid())
+  userId       String
+  user         User           @relation("Attendance_user", fields: [userId], references: [id])
+  date         DateTime
+  type         AttendanceType
+  minutesLate  Int?           // Solo para TARDY
+  reason       String?
+  attachmentUrl String?       // URL del archivo adjunto (justificante, etc.)
+  attachmentName String?      // Nombre original del archivo
+  reportedBy   String?
+  reporter     User?          @relation("Attendance_reporter", fields: [reportedBy], references: [id])
+  approvedBy   String?
+  status       String?        // PENDING/APPROVED/REJECTED
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+  @@map("attendance_records")
+}
+
+// Reportes de mantenimiento de flota (incidentes, observaciones)
+enum MaintenanceStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model FleetMaintenanceReport {
+  id         String   @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  reportedBy String?
+  reporter   User?    @relation("FleetMaintenance_reporter", fields: [reportedBy], references: [id])
+  date       DateTime @default(now())
+  description String
+  severity   String?  // LOW/MEDIUM/HIGH
+  attachments Json?
+  status     MaintenanceStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, status])
+  @@map("fleet_maintenance_reports")
+}
+
+// Mantenimiento preventivo programado y realizado
+model PreventiveMaintenance {
+  id           String   @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  scheduledAt  DateTime
+  performedAt  DateTime?
+  type         String?
+  performedBy  String?  // user id
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, scheduledAt])
+  @@map("preventive_maintenances")
+}
+
+// Reparaciones realizadas
+model Repair {
+  id         String   @id @default(uuid())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  date       DateTime @default(now())
+  performedBy String?
+  description String
+  cost       Decimal? @db.Decimal(12,2)
+  attachments Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, date])
+  @@map("repairs")
+}
+
+// Semáforo de llantas
+enum TireCondition {
+  GOOD
+  WARNING
+  REPLACE
+}
+
+model TireSemaphore {
+  id           String        @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id])
+  inspectorId  String?
+  inspector    User?         @relation("TireSemaphore_inspector", fields: [inspectorId], references: [id])
+  frontLeft    TireCondition @default(GOOD)
+  frontRight   TireCondition @default(GOOD)
+  rearLeft     TireCondition @default(GOOD)
+  rearRight    TireCondition @default(GOOD)
+  notes        String?
+  recordedAt   DateTime      @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, recordedAt])
+  @@map("tire_semaphore")
 }

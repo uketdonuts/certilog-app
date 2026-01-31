@@ -11,13 +11,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import * as Application from 'expo-application';
 import { useAuth } from '@/lib/context/AuthContext';
 import { getStoredUser } from '@/lib/api/auth';
 import logger from '@/lib/services/logger';
 
-const APP_VERSION = Application.nativeApplicationVersion || Constants.expoConfig?.version || '1.0.0';
+const APP_VERSION = Constants.nativeAppVersion || Constants.expoConfig?.version || '1.0.0';
 
 // Cross-platform alert that works on web
 const showAlert = (title: string, message: string) => {
@@ -95,7 +95,7 @@ export default function LoginScreen() {
   };
 
   const handlePinKeyPress = (digit: string) => {
-    if (pin.length < 6) {
+    if (pin.length < 4) {
       setPin(prev => prev + digit);
     }
   };
@@ -137,7 +137,7 @@ export default function LoginScreen() {
       {mode === 'pin' ? (
         <View style={styles.pinContainer}>
           <View style={styles.pinDisplay}>
-            {[0, 1, 2, 3, 4, 5].map((i) => (
+            {[0, 1, 2, 3].map((i) => (
               <View
                 key={i}
                 style={[styles.pinDot, pin.length > i && styles.pinDotFilled]}
@@ -169,7 +169,10 @@ export default function LoginScreen() {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Ingresar</Text>
+              <>
+                <Ionicons name="log-in-outline" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.buttonText}>Ingresar</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -198,7 +201,10 @@ export default function LoginScreen() {
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Ingresar</Text>
+              <>
+                <Ionicons name="log-in-outline" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.buttonText}>Ingresar</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -321,6 +327,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
   buttonDisabled: {
     backgroundColor: '#93C5FD',
@@ -329,5 +343,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  buttonIcon: {
+    marginRight: 10,
+    opacity: 0.95,
   },
 });

@@ -47,6 +47,15 @@ IF "%JAVA_HOME%"=="" (
 
 echo Using JAVA_HOME: %JAVA_HOME%
 
+REM Increase Node.js memory limit to prevent heap out of memory errors
+set NODE_OPTIONS=--max-old-space-size=8192
+
+REM Clear Metro/React Native cache
+echo Clearing Metro bundler cache...
+cd /d "%SCRIPT_DIR%\..\apps\mobile"
+IF EXIST "node_modules\.cache" rmdir /s /q "node_modules\.cache" 2>nul
+IF EXIST ".expo" rmdir /s /q ".expo" 2>nul
+
 REM Run Gradle
 IF NOT EXIST "%ANDROID_DIR%\gradlew.bat" (
     echo gradlew.bat not found
@@ -55,6 +64,11 @@ IF NOT EXIST "%ANDROID_DIR%\gradlew.bat" (
 )
 
 cd /d "%ANDROID_DIR%"
+
+REM Clean build to ensure fresh compilation with latest code
+echo Cleaning previous build...
+call gradlew.bat clean
+
 echo Running Gradle assembleRelease...
 call gradlew.bat assembleRelease
 IF ERRORLEVEL 1 (
@@ -76,17 +90,22 @@ IF "%BUILT_APK%"=="" (
 
 REM Destination
 set DEST_DIR=%SCRIPT_DIR%\..\apps\dashboard\public\downloads
+set HISTORY_DIR=%DEST_DIR%\history
 IF NOT EXIST "%DEST_DIR%" mkdir "%DEST_DIR%"
+IF NOT EXIST "%HISTORY_DIR%" mkdir "%HISTORY_DIR%"
+
+REM Move all existing APKs to history folder before copying new one
+echo Moving previous APK versions to history...
+for %%f in ("%DEST_DIR%\*.apk") do (
+    echo   Moving %%~nxf to history
+    move "%%f" "%HISTORY_DIR%\" >nul 2>&1
+)
 
 REM Copy with versioned name
 set VERSIONED_APK=certilog-v%APP_VERSION%.apk
 
-REM Also copy to a latest filename (always points to latest build)
-set LATEST_APK=certilog-latest.apk
-
-echo Copying APK...
+echo Copying new APK...
 copy "%BUILT_APK%" "%DEST_DIR%\%VERSIONED_APK%" /Y
-copy "%BUILT_APK%" "%DEST_DIR%\%LATEST_APK%" /Y
 
 
 REM Update dashboard version file
@@ -104,8 +123,7 @@ echo ========================================
 echo Build complete!
 echo Version: %APP_VERSION%
 echo APK: %DEST_DIR%\%VERSIONED_APK%
-echo Latest: %DEST_DIR%\%LATEST_APK%
-echo Stable: %DEST_DIR%\%STABLE_APK%
+echo History: %HISTORY_DIR%
 echo Version file: %VERSION_JSON%
 echo ========================================
 

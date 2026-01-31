@@ -12,6 +12,7 @@ export interface Customer {
 export interface Delivery {
   id: string;
   trackingCode: string;
+  publicTrackingToken: string | null;
   customerId: string;
   customer: Customer;
   courierId: string | null;

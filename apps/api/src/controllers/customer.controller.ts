@@ -1,5 +1,13 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database.js';
+
+function safeJson(value: unknown) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return undefined;
+  }
+}
 import { createCustomerSchema, updateCustomerSchema, paginationSchema } from '../utils/validation.js';
 
 export async function getCustomers(req: Request, res: Response): Promise<void> {
@@ -101,6 +109,20 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
       data: validation.data,
     });
 
+    // Log creation
+    try {
+      await prisma.appLog.create({
+        data: {
+          level: 'INFO',
+          message: `Cliente ${customer.id} creado`,
+          context: safeJson({ action: 'create', entityType: 'customer', entityId: customer.id }),
+          userId: null,
+        },
+      });
+    } catch (e) {
+      console.error('Error creating app log for customer creation:', e);
+    }
+
     res.status(201).json({ success: true, data: customer });
   } catch (error) {
     console.error('Create customer error:', error);
@@ -132,6 +154,20 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
       data: validation.data,
     });
 
+    // Log update
+    try {
+      await prisma.appLog.create({
+        data: {
+          level: 'INFO',
+          message: `Cliente ${id} actualizado`,
+          context: safeJson({ action: 'update', entityType: 'customer', entityId: id, changes: validation.data }),
+          userId: null,
+        },
+      });
+    } catch (e) {
+      console.error('Error creating app log for customer update:', e);
+    }
+
     res.json({ success: true, data: customer });
   } catch (error) {
     console.error('Update customer error:', error);
@@ -142,6 +178,7 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
 export async function deleteCustomer(req: Request, res: Response): Promise<void> {
   try {
     const id = String(req.params.id);
+    const permanent = req.query.permanent === 'true';
 
     const customer = await prisma.customer.findUnique({
       where: { id },
@@ -157,20 +194,58 @@ export async function deleteCustomer(req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Check if customer has deliveries
-    if (customer._count.deliveries > 0) {
-      res.status(400).json({
-        success: false,
-        error: 'No se puede eliminar un cliente con entregas asociadas',
+    if (permanent) {
+      // Check if customer has deliveries for permanent deletion
+      if (customer._count.deliveries > 0) {
+        res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar permanentemente un cliente con entregas asociadas',
+        });
+        return;
+      }
+
+      await prisma.customer.delete({
+        where: { id },
       });
-      return;
+
+      // Log permanent deletion
+      try {
+        await prisma.appLog.create({
+          data: {
+            level: 'INFO',
+            message: `Cliente ${id} eliminado permanentemente`,
+            context: safeJson({ action: 'delete_permanent', entityType: 'customer', entityId: id }),
+            userId: null,
+          },
+        });
+      } catch (e) {
+        console.error('Error creating app log for customer deletion:', e);
+      }
+
+      res.json({ success: true, message: 'Cliente eliminado permanentemente' });
+    } else {
+      // Soft delete - just deactivate
+      await prisma.customer.update({
+        where: { id },
+        data: { isActive: false },
+      });
+
+      // Log deactivation
+      try {
+        await prisma.appLog.create({
+          data: {
+            level: 'INFO',
+            message: `Cliente ${id} desactivado`,
+            context: safeJson({ action: 'deactivate', entityType: 'customer', entityId: id }),
+            userId: null,
+          },
+        });
+      } catch (e) {
+        console.error('Error creating app log for customer deactivation:', e);
+      }
+
+      res.json({ success: true, message: 'Cliente desactivado exitosamente' });
     }
-
-    await prisma.customer.delete({
-      where: { id },
-    });
-
-    res.json({ success: true, message: 'Cliente eliminado exitosamente' });
   } catch (error) {
     console.error('Delete customer error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });

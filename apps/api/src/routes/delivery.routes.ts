@@ -12,6 +12,7 @@ import {
   deleteDelivery,
   syncDeliveries,
   getDeliveryStats,
+  exportDeliveries,
 } from '../controllers/delivery.controller.js';
 import { authenticateToken, requireAdminOrDispatcher, requireCourier } from '../middleware/auth.js';
 
@@ -26,6 +27,7 @@ router.post('/sync', requireCourier, syncDeliveries);
 
 // Admin/Dispatcher routes
 router.get('/stats', requireAdminOrDispatcher, getDeliveryStats);
+router.get('/export', requireAdminOrDispatcher, exportDeliveries);
 router.get('/', requireAdminOrDispatcher, getDeliveries);
 router.post('/', requireAdminOrDispatcher, createDelivery);
 router.put('/:id/assign', requireAdminOrDispatcher, assignDelivery);

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import * as XLSX from 'xlsx';
 import prisma from '../config/database.js';
 import { sendPushNotification } from '../config/firebase.js';
 import {
@@ -53,6 +54,13 @@ export async function getDeliveries(req: AuthRequest, res: Response): Promise<vo
       where.scheduledDate = {};
       if (filters.fromDate) (where.scheduledDate as Record<string, Date>).gte = new Date(filters.fromDate);
       if (filters.toDate) (where.scheduledDate as Record<string, Date>).lte = new Date(filters.toDate);
+    }
+
+    // Filter by creation date
+    if (filters.createdAtFrom || filters.createdAtTo) {
+      where.createdAt = {};
+      if (filters.createdAtFrom) (where.createdAt as Record<string, Date>).gte = new Date(filters.createdAtFrom);
+      if (filters.createdAtTo) (where.createdAt as Record<string, Date>).lte = new Date(filters.createdAtTo);
     }
 
     if (filters.search) {
@@ -191,7 +199,7 @@ export async function getDeliveryById(req: AuthRequest, res: Response): Promise<
     }
 
     // Couriers can only see their own deliveries
-    if (req.user!.role === Role.COURIER && delivery.courierId !== req.user!.userId) {
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
       res.status(403).json({ success: false, error: 'No tienes permiso para ver esta entrega' });
       return;
     }
@@ -209,7 +217,7 @@ export async function getDeliveryRoute(req: AuthRequest, res: Response): Promise
 
     const delivery = await prisma.delivery.findUnique({
       where: { id },
-      select: { id: true, courierId: true },
+      select: { id: true, courierId: true, status: true },
     });
 
     if (!delivery) {
@@ -217,8 +225,14 @@ export async function getDeliveryRoute(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (req.user!.role === Role.COURIER && delivery.courierId !== req.user!.userId) {
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
       res.status(403).json({ success: false, error: 'No tienes permiso para ver la ruta de esta entrega' });
+      return;
+    }
+
+    // Only allow route access when delivery is in-transit or delivered (otherwise route is not meaningful)
+    if (delivery.status !== DeliveryStatus.IN_TRANSIT && delivery.status !== DeliveryStatus.DELIVERED) {
+      res.status(400).json({ success: false, error: 'Ruta no disponible hasta que la entrega esté en tránsito o entregada' });
       return;
     }
 
@@ -305,21 +319,10 @@ export async function createDelivery(req: Request, res: Response): Promise<void>
         return;
       }
 
-      // Enforce: 1 active delivery (ASSIGNED/IN_TRANSIT) per courier.
-      const activeCount = await prisma.delivery.count({
-        where: {
-          courierId: data.courierId,
-          status: { in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT] },
-        },
-      });
-
-      if (activeCount > 0) {
-        res.status(400).json({
-          success: false,
-          error: 'El mensajero ya tiene una entrega activa. Solo se permite 1 a la vez.',
-        });
-        return;
-      }
+      // NOTE: we allow assigning multiple deliveries to a courier.
+      // The restriction that a courier cannot have more than one delivery
+      // IN_TRANSIT is enforced in `startDelivery` (they may only *start*
+      // one at a time).
     }
 
     const delivery = await prisma.delivery.create({
@@ -357,8 +360,7 @@ export async function createDelivery(req: Request, res: Response): Promise<void>
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 }
-
-export async function updateDelivery(req: Request, res: Response): Promise<void> {
+export async function updateDelivery(req: AuthRequest, res: Response): Promise<void> {
   try {
     const id = String(req.params.id);
 
@@ -368,18 +370,21 @@ export async function updateDelivery(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const existingDelivery = await prisma.delivery.findUnique({
-      where: { id },
-    });
-
+    const existingDelivery = await prisma.delivery.findUnique({ where: { id } });
     if (!existingDelivery) {
       res.status(404).json({ success: false, error: 'Entrega no encontrada' });
       return;
     }
 
+    // Couriers/helpers can only update their own deliveries
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && existingDelivery.courierId !== req.user!.userId) {
+      res.status(403).json({ success: false, error: 'No tienes permiso para modificar esta entrega' });
+      return;
+    }
+
     const data = validation.data;
 
-    const delivery = await prisma.delivery.update({
+    const updated = await prisma.delivery.update({
       where: { id },
       data: {
         ...data,
@@ -388,16 +393,13 @@ export async function updateDelivery(req: Request, res: Response): Promise<void>
       include: {
         customer: true,
         courier: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-          },
+          select: { id: true, fullName: true, phone: true },
         },
+        photos: true,
       },
     });
 
-    res.json({ success: true, data: normalizeDeliveryLatLng(delivery) });
+    res.json({ success: true, data: normalizeDeliveryLatLng(updated) });
   } catch (error) {
     console.error('Update delivery error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
@@ -439,24 +441,9 @@ export async function assignDelivery(req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Enforce: 1 active delivery (ASSIGNED/IN_TRANSIT) per courier.
-    // This prevents assigning multiple deliveries at the same time.
-    const activeOther = await prisma.delivery.findFirst({
-      where: {
-        courierId,
-        status: { in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT] },
-        NOT: { id },
-      },
-      select: { id: true, trackingCode: true, status: true },
-    });
-
-    if (activeOther) {
-      res.status(400).json({
-        success: false,
-        error: `El mensajero ya tiene una entrega activa (${activeOther.trackingCode}). Solo se permite 1 a la vez.`,
-      });
-      return;
-    }
+    // Allow assigning multiple deliveries. The courier may have several
+    // ASSIGNED deliveries, but they are only allowed to transition one
+    // to IN_TRANSIT at a time (this is checked in `startDelivery`).
 
     const updatedDelivery = await prisma.delivery.update({
       where: { id },
@@ -594,8 +581,8 @@ export async function completeDelivery(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    // Couriers can only complete their own deliveries
-    if (req.user!.role === Role.COURIER && delivery.courierId !== req.user!.userId) {
+    // Couriers/helpers can only complete their own deliveries
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
       res.status(403).json({ success: false, error: 'No tienes permiso para completar esta entrega' });
       return;
     }
@@ -828,5 +815,109 @@ export async function getDeliveryStats(req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error('Get delivery stats error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function exportDeliveries(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const filters = deliveryFiltersSchema.parse(req.query);
+
+    // Build where clause (same as getDeliveries)
+    const where: Record<string, unknown> = {};
+
+    if (filters.status) where.status = filters.status;
+    if (filters.courierId) where.courierId = filters.courierId;
+    if (filters.customerId) where.customerId = filters.customerId;
+    if (filters.priority) where.priority = filters.priority;
+
+    if (filters.fromDate || filters.toDate) {
+      where.scheduledDate = {};
+      if (filters.fromDate) (where.scheduledDate as Record<string, Date>).gte = new Date(filters.fromDate);
+      if (filters.toDate) (where.scheduledDate as Record<string, Date>).lte = new Date(filters.toDate);
+    }
+
+    if (filters.createdAtFrom || filters.createdAtTo) {
+      where.createdAt = {};
+      if (filters.createdAtFrom) (where.createdAt as Record<string, Date>).gte = new Date(filters.createdAtFrom);
+      if (filters.createdAtTo) (where.createdAt as Record<string, Date>).lte = new Date(filters.createdAtTo);
+    }
+
+    if (filters.search) {
+      where.OR = [
+        { trackingCode: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+        { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { customer: { address: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    // Get all deliveries (no pagination for export)
+    const deliveries = await prisma.delivery.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        customer: {
+          select: {
+            name: true,
+            phone: true,
+            cedula: true,
+            address: true,
+          },
+        },
+        courier: {
+          select: {
+            fullName: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    // Format data for Excel
+    const excelData = deliveries.map((d) => ({
+      'Código': d.trackingCode,
+      'Estado': d.status,
+      'Prioridad': d.priority,
+      'Cliente': d.customer.name,
+      'Cédula': d.customer.cedula || '',
+      'Teléfono Cliente': d.customer.phone,
+      'Dirección': d.customer.address,
+      'Mensajero': d.courier?.fullName || 'Sin asignar',
+      'Descripción': d.description || '',
+      'Fecha Creación': d.createdAt.toISOString(),
+      'Fecha Programada': d.scheduledDate?.toISOString() || '',
+      'Fecha Entregada': d.deliveredAt?.toISOString() || '',
+      'Notas': d.deliveryNotes || '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Entregas');
+
+    // Set column widths
+    worksheet['!cols'] = [
+      { wch: 15 }, // Código
+      { wch: 12 }, // Estado
+      { wch: 10 }, // Prioridad
+      { wch: 25 }, // Cliente
+      { wch: 15 }, // Cédula
+      { wch: 15 }, // Teléfono
+      { wch: 40 }, // Dirección
+      { wch: 20 }, // Mensajero
+      { wch: 30 }, // Descripción
+      { wch: 20 }, // Fecha Creación
+      { wch: 20 }, // Fecha Programada
+      { wch: 20 }, // Fecha Entregada
+      { wch: 30 }, // Notas
+    ];
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=entregas_${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Export deliveries error:', error);
+    res.status(500).json({ success: false, error: 'Error al exportar entregas' });
   }
 }

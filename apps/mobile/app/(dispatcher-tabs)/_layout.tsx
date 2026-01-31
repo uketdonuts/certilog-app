@@ -3,7 +3,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/lib/context/AuthContext';
 
 export default function DispatcherTabsLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  // Wait for auth to load before rendering tabs to avoid showing
+  // dispatcher-only screens to unauthenticated/unknown users briefly.
+  if (isLoading) return null;
+
+  // Debug: log auth state to help diagnose incorrect tab rendering
+  try {
+    console.log('[Layout][dispatcher-tabs] user:', JSON.stringify(user), 'isLoading:', isLoading);
+  } catch (e) {
+    console.log('[Layout][dispatcher-tabs] user (non-serializable)', user, 'isLoading:', isLoading);
+  }
 
   if (user && (user.role !== 'ADMIN' && user.role !== 'DISPATCHER')) {
     return <Redirect href="/(tabs)" />;

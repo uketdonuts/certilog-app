@@ -16,6 +16,7 @@ import {
   DocumentTextIcon,
   StarIcon,
   VideoCameraIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline';
 import {
   getDeliveries,
@@ -27,7 +28,11 @@ import {
   assignDelivery,
   importDeliveriesFromExcel,
   downloadImportTemplate,
+  exportDeliveriesToExcel,
 } from '@/lib/api';
+import { useToast } from '@/components/ToastProvider';
+import Pagination from '@/components/Pagination';
+import { formatPanamaDateTime } from '@/lib/utils/dateFormat';
 
 const DeliveryRouteMap = dynamic(() => import('../map/DeliveryRouteMapClient'), { ssr: false });
 
@@ -40,6 +45,7 @@ interface DeliveryPhoto {
 interface Delivery {
   id: string;
   trackingCode: string;
+  publicTrackingToken?: string;
   status: string;
   priority: string;
   description: string | null;
@@ -88,6 +94,12 @@ export default function DeliveriesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [createdAtFrom, setCreatedAtFrom] = useState('');
+  const [createdAtTo, setCreatedAtTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [exportLoading, setExportLoading] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState<Delivery | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<Delivery | null>(null);
@@ -104,6 +116,8 @@ export default function DeliveriesPage() {
     errors: string[];
   } | null>(null);
 
+  const toast = useToast();
+
   // New delivery form
   const [newDelivery, setNewDelivery] = useState({
     customerId: '',
@@ -114,7 +128,7 @@ export default function DeliveriesPage() {
 
   useEffect(() => {
     fetchData();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, createdAtFrom, createdAtTo, page]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,18 +161,49 @@ export default function DeliveriesPage() {
   async function fetchData() {
     try {
       const [deliveriesData, couriersData, customersData] = await Promise.all([
-        getDeliveries({ search, status: statusFilter || undefined, limit: 50 }),
+        getDeliveries({
+          search,
+          status: statusFilter || undefined,
+          createdAtFrom: createdAtFrom ? new Date(createdAtFrom).toISOString() : undefined,
+          createdAtTo: createdAtTo ? new Date(createdAtTo + 'T23:59:59').toISOString() : undefined,
+          page,
+          limit: 20,
+        }),
         getCouriers(),
         getCustomers({ limit: 100 }),
       ]);
 
-      setDeliveries(deliveriesData.data);
-      setCouriers(couriersData);
-      setCustomers(customersData.data);
+      // Ensure data is always an array
+      const deliveriesList = Array.isArray(deliveriesData?.data) ? deliveriesData.data : Array.isArray(deliveriesData) ? deliveriesData : [];
+      const couriersList = Array.isArray(couriersData) ? couriersData : [];
+      const customersList = Array.isArray(customersData?.data) ? customersData.data : Array.isArray(customersData) ? customersData : [];
+
+      setDeliveries(deliveriesList);
+      setTotalPages(deliveriesData?.totalPages || 1);
+      setTotalItems(deliveriesData?.total || 0);
+      setCouriers(couriersList);
+      setCustomers(customersList);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleExportExcel() {
+    setExportLoading(true);
+    try {
+      await exportDeliveriesToExcel({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        createdAtFrom: createdAtFrom ? new Date(createdAtFrom).toISOString() : undefined,
+        createdAtTo: createdAtTo ? new Date(createdAtTo + 'T23:59:59').toISOString() : undefined,
+      });
+    } catch (error) {
+      console.error('Error exporting deliveries:', error);
+      toast.push({ type: 'error', message: 'Error al exportar entregas' });
+    } finally {
+      setExportLoading(false);
     }
   }
 
@@ -177,7 +222,7 @@ export default function DeliveriesPage() {
     } catch (error) {
       console.error('Error creating delivery:', error);
       const msg = (error as any)?.response?.data?.error;
-      alert(msg || 'Error al crear la entrega');
+      toast.push({ type: 'error', message: msg || 'Error al crear la entrega' });
     }
   }
 
@@ -190,7 +235,7 @@ export default function DeliveriesPage() {
     } catch (error) {
       console.error('Error assigning delivery:', error);
       const msg = (error as any)?.response?.data?.error;
-      alert(msg || 'Error al asignar la entrega');
+      toast.push({ type: 'error', message: msg || 'Error al asignar la entrega' });
     }
   }
 
@@ -201,7 +246,7 @@ export default function DeliveriesPage() {
       setShowDetailsModal(details);
     } catch (error) {
       console.error('Error fetching delivery details:', error);
-      alert('Error al cargar los detalles de la entrega');
+      toast.push({ type: 'error', message: 'Error al cargar los detalles de la entrega' });
     } finally {
       setLoadingDetails(false);
     }
@@ -219,7 +264,7 @@ export default function DeliveriesPage() {
       }
     } catch (error) {
       console.error('Error importing deliveries:', error);
-      alert('Error al importar entregas');
+      toast.push({ type: 'error', message: 'Error al importar entregas' });
     } finally {
       setImportLoading(false);
     }
@@ -230,7 +275,7 @@ export default function DeliveriesPage() {
       await downloadImportTemplate();
     } catch (error) {
       console.error('Error downloading template:', error);
-      alert('Error al descargar plantilla');
+      toast.push({ type: 'error', message: 'Error al descargar plantilla' });
     }
   }
 
@@ -278,6 +323,14 @@ export default function DeliveriesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Entregas</h1>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleExportExcel}
+            disabled={exportLoading}
+            className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition disabled:opacity-50"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            {exportLoading ? 'Exportando...' : 'Exportar Excel'}
+          </button>
+          <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
           >
@@ -295,14 +348,14 @@ export default function DeliveriesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
             placeholder="Buscar por código, cliente o dirección..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
@@ -310,7 +363,7 @@ export default function DeliveriesPage() {
           <FunnelIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             className="pl-10 pr-8 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 appearance-none bg-white"
           >
             <option value="">Todos los estados</option>
@@ -320,6 +373,22 @@ export default function DeliveriesPage() {
             <option value="DELIVERED">Entregadas</option>
             <option value="FAILED">Fallidas</option>
           </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Creado:</label>
+          <input
+            type="date"
+            value={createdAtFrom}
+            onChange={(e) => { setCreatedAtFrom(e.target.value); setPage(1); }}
+            className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+          />
+          <span className="text-gray-400">-</span>
+          <input
+            type="date"
+            value={createdAtTo}
+            onChange={(e) => { setCreatedAtTo(e.target.value); setPage(1); }}
+            className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+          />
         </div>
       </div>
 
@@ -343,6 +412,9 @@ export default function DeliveriesPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Prioridad
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Creado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Acciones
@@ -392,6 +464,9 @@ export default function DeliveriesPage() {
                       {delivery.priority}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {formatPanamaDateTime(delivery.createdAt)}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <button
@@ -403,6 +478,18 @@ export default function DeliveriesPage() {
                         <EyeIcon className="h-4 w-4" />
                         Ver
                       </button>
+                      {delivery.publicTrackingToken && (
+                        <a
+                          href={`/track/${delivery.publicTrackingToken}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+                          title="Ver seguimiento público"
+                        >
+                          <LinkIcon className="h-4 w-4" />
+                          Seguimiento
+                        </a>
+                      )}
                       {(delivery.status === 'PENDING' ||
                         delivery.status === 'ASSIGNED') && (
                         <button
@@ -431,6 +518,16 @@ export default function DeliveriesPage() {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       {/* New Delivery Modal */}
@@ -700,17 +797,6 @@ export default function DeliveriesPage() {
                           <MapPinIcon className="h-5 w-5" />
                           <span>Ver en Google Maps</span>
                         </div>
-                        {
-                          (() => {
-                            const lat = Number(showDetailsModal.deliveryLat as any);
-                            const lng = Number(showDetailsModal.deliveryLng as any);
-                            const latStr = Number.isFinite(lat) ? lat.toFixed(6) : '—';
-                            const lngStr = Number.isFinite(lng) ? lng.toFixed(6) : '—';
-                            return (
-                              <p className="text-sm text-gray-500 mt-1">{latStr}, {lngStr}</p>
-                            );
-                          })()
-                        }
                       </a>
                     </div>
                   </div>

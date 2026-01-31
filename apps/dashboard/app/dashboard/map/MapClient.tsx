@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getCouriersLocations, getCourierLocationHistory } from "@/lib/api";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { cleanTrailTuples, cleanRouteTrace } from "@/lib/utils/routeTrace";
 
 const AnyMapContainer: any = MapContainer;
 
@@ -28,7 +29,7 @@ type Courier = {
   location: CourierLocation;
 };
 
-const DEFAULT_CENTER: LatLngTuple = [18.4861, -69.9312];
+const DEFAULT_CENTER: LatLngTuple = [9.0, -79.5]; // Panama City
 const DEFAULT_ZOOM = 12;
 const MAX_TRAIL_POINTS = 200;
 
@@ -138,9 +139,21 @@ export default function MapClient() {
       });
 
       const pointsRaw = Array.isArray(resp?.data) ? resp.data : [];
-      const points = pointsRaw
-        .map((p: any) => [Number(p.lat), Number(p.lng)] as LatLngTuple)
-        .filter((p: LatLngTuple) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const cleaned = cleanRouteTrace(
+        pointsRaw.map((p: any) => ({
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          recordedAt: p.recordedAt,
+        })),
+        {
+          maxSpeedKmh: 160,
+          maxJumpMeters: 400,
+          minStepMeters: 2,
+          smoothingWindow: 3,
+        }
+      );
+
+      const points = cleaned.map((p) => [p.lat, p.lng] as LatLngTuple);
 
       // API returns desc by recordedAt, so reverse to draw chronological trail.
       points.reverse();
@@ -153,6 +166,15 @@ export default function MapClient() {
       console.error(e);
     }
   }, [historyHours]);
+
+  const visibleTrail = useMemo(() => {
+    if (!followCourierId) return null;
+    const raw = trailByCourier[followCourierId] ?? [];
+    if (!raw.length) return null;
+    // Runtime cleaning of live trail (removes big jumps and reduces micro-jitter).
+    const cleaned = cleanTrailTuples(raw, { maxJumpMeters: 400, minStepMeters: 2 });
+    return cleaned.slice(-MAX_TRAIL_POINTS);
+  }, [followCourierId, trailByCourier]);
 
   const toggleFollow = useCallback(
     async (courierId: string) => {
@@ -252,7 +274,7 @@ export default function MapClient() {
 
       <div className="h-[calc(100vh-12rem)] rounded-xl overflow-hidden shadow-lg relative">
         <AnyMapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} style={{ width: "100%", height: "100%" }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
           <FollowController target={followTarget} />
 
           {couriers.map((c) =>
@@ -263,14 +285,34 @@ export default function MapClient() {
                 eventHandlers={{
                   click: () => setSelectedCourierId(c.courierId),
                 }}
-              />
+              >
+                <Popup>
+                  <div className="min-w-[140px]">
+                    <div className="font-bold text-gray-900 mb-1">{c.fullName || "Mensajero"}</div>
+                    <div className="text-xs text-gray-600 space-y-0.5">
+                      {c.activeDeliveries != null && <div>Activas: {c.activeDeliveries}</div>}
+                      <div>
+                        {c.location.lat.toFixed(5)}, {c.location.lng.toFixed(5)}
+                      </div>
+                      {c.location.recordedAt && <div>{new Date(c.location.recordedAt).toLocaleString()}</div>}
+                      {c.location.batteryLevel != null && <div>Batería: {c.location.batteryLevel}%</div>}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
             ) : null
           )}
 
-          {followCourierId && trailByCourier[followCourierId]?.length ? (
+          {followCourierId && visibleTrail?.length ? (
             <Polyline
-              positions={trailByCourier[followCourierId]}
-              pathOptions={{ color: "#2563eb", weight: 4, opacity: 0.9 }}
+              positions={visibleTrail}
+              pathOptions={{
+                color: "#2563eb",
+                weight: 5,
+                opacity: 0.9,
+                lineCap: "round",
+                lineJoin: "round",
+              }}
             />
           ) : null}
         </AnyMapContainer>
@@ -375,7 +417,11 @@ export default function MapClient() {
                 <div className="text-sm font-medium text-gray-900 truncate">{selectedCourier.fullName}</div>
                 <div className="mt-1 text-xs text-gray-600">
                   {selectedCourier.location
-                    ? `Lat: ${selectedCourier.location.lat.toFixed(5)} · Lng: ${selectedCourier.location.lng.toFixed(5)}`
+                    ? `Última: ${formatTime(selectedCourier.location.recordedAt)}${
+                        selectedCourier.location.batteryLevel != null
+                          ? ` · Bat: ${selectedCourier.location.batteryLevel}%`
+                          : ""
+                      }`
                     : "Sin ubicación"}
                 </div>
               </div>

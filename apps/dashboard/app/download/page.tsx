@@ -11,12 +11,6 @@ interface AppInfo {
   available: boolean;
 }
 
-interface VersionInfo {
-  version: string;
-  buildDate: string;
-  buildNumber: number;
-}
-
 export default function DownloadPage() {
   const [appInfo, setAppInfo] = useState<AppInfo>({
     version: '-',
@@ -33,46 +27,31 @@ export default function DownloadPage() {
 
   const checkApkAvailability = async () => {
     try {
-      // Fetch version info first (with cache-busting to always get latest)
-      let versionInfo: VersionInfo | null = null;
-      try {
-        const versionResponse = await fetch(`/app-version.json?t=${Date.now()}`, {
-          cache: 'no-store',
-        });
-        if (versionResponse.ok) {
-          versionInfo = await versionResponse.json();
-        }
-      } catch {
-        // Version file not available
-      }
+      // Use the dynamic API route which reads directly from filesystem at runtime.
+      // This bypasses Next.js static file caching issues that occur when new APKs
+      // are added to the mounted volume without rebuilding the container.
+      const response = await fetch(`/download/apk?t=${Date.now()}`, {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
 
-      if (!versionInfo) {
-        // No version info, APK not built yet
-        return;
-      }
-
-      // Check APK availability using versioned filename
-      const response = await fetch(`/download/apk`, { method: 'HEAD', cache: 'no-store' });
       if (response.ok) {
         const size = response.headers.get('content-length');
         const lastModified = response.headers.get('last-modified');
+        // Extract version from Content-Disposition header (e.g., 'CertiLog-v1.0.21.apk')
+        const disposition = response.headers.get('content-disposition') || '';
+        const versionMatch = disposition.match(/v(\d+\.\d+\.\d+)/);
+        const version = versionMatch ? versionMatch[1] : '-';
+
         setAppInfo({
-          version: versionInfo.version,
+          version,
           size: size ? `${(parseInt(size) / 1024 / 1024).toFixed(1)} MB` : '-',
           lastUpdated: lastModified ? new Date(lastModified).toLocaleDateString('es-ES') : '-',
-          buildDate: versionInfo.buildDate,
+          buildDate: '-',
           available: true,
         });
-      } else {
-        // Version info exists but APK not available yet
-        setAppInfo({
-          version: versionInfo.version,
-          size: '-',
-          lastUpdated: '-',
-          buildDate: versionInfo.buildDate,
-          available: false,
-        });
       }
+      // If 404, appInfo stays at default (available: false)
     } catch {
       // APK not available yet
     } finally {
@@ -128,7 +107,7 @@ export default function DownloadPage() {
           </div>
         ) : appInfo.available ? (
           <a
-            href={`/download/apk?t=${Date.now()}`}
+            href="/download/apk"
             download={`CertiLog-v${appInfo.version}.apk`}
             className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl text-center transition-colors"
           >

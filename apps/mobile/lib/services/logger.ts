@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import * as Application from 'expo-application';
 import * as Device from 'expo-device';
 
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
@@ -75,7 +74,7 @@ async function sendLog(
       context: { ...errorContext, ...context },
       deviceInfo,
       platform: Platform.OS,
-      appVersion: Application.nativeApplicationVersion || Constants.expoConfig?.version || '1.0.0',
+      appVersion: Constants.nativeAppVersion || Constants.expoConfig?.version || '1.0.0',
     };
 
     // Log locally too

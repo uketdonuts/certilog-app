@@ -4,7 +4,20 @@
       "Bash(curl:*)",
       "Bash(docker compose build:*)",
       "Bash(docker compose:*)",
-      "Bash(node scripts/smoke_tracking.mjs:*)"
+      "Bash(node scripts/smoke_tracking.mjs:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(dir:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(del \"c:\\\\Users\\\\Noel\\\\Documents\\\\Dev\\\\certilog-app\\\\apps\\\\mobile\\\\app.json\")",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(node -e:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(node scripts/reset_db.js:*)"
     ]
   }
 }

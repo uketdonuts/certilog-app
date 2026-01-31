@@ -71,16 +71,16 @@ services:
       context: .
       dockerfile: ./apps/dashboard/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:2120
-        - NEXT_PUBLIC_SOCKET_URL=http://localhost:2120
+        - NEXT_PUBLIC_API_URL=https://jtfrcpdb-2120.use2.devtunnels.ms
+        - NEXT_PUBLIC_SOCKET_URL=https://jtfrcpdb-2120.use2.devtunnels.ms
     container_name: certilog-dashboard
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:2120
-      - NEXT_PUBLIC_SOCKET_URL=http://localhost:2120
+      - NEXT_PUBLIC_API_URL=https://jtfrcpdb-2120.use2.devtunnels.ms
+      - NEXT_PUBLIC_SOCKET_URL=https://jtfrcpdb-2120.use2.devtunnels.ms
     depends_on:
       - api
       - postgres

@@ -8,6 +8,7 @@ interface ExcelRow {
   nombre: string;
   telefono: string;
   direccion: string;
+  cedula?: string;
   email?: string;
   latitud?: number;
   longitud?: number;
@@ -81,29 +82,39 @@ export async function importDeliveriesFromExcel(req: AuthRequest, res: Response)
           continue;
         }
 
-        // Find or create customer
+        // Find or create customer - match by cedula, phone, OR email to avoid duplicates
+        const cedulaTrimmed = row.cedula?.toString().trim() || null;
+        const phoneTrimmed = row.telefono.toString().trim();
+        const emailTrimmed = row.email?.trim() || null;
+
+        const orConditions: any[] = [{ phone: phoneTrimmed }];
+        if (cedulaTrimmed) orConditions.unshift({ cedula: cedulaTrimmed });
+        if (emailTrimmed) orConditions.push({ email: emailTrimmed });
+
         let customer = await prisma.customer.findFirst({
-          where: {
-            OR: [
-              { phone: row.telefono.toString().trim() },
-              { email: row.email?.trim() || undefined },
-            ],
-          },
+          where: { OR: orConditions },
         });
 
         if (!customer) {
           customer = await prisma.customer.create({
             data: {
               name: row.nombre.trim(),
-              phone: row.telefono.toString().trim(),
+              phone: phoneTrimmed,
+              cedula: cedulaTrimmed,
               address: row.direccion.trim(),
-              email: row.email?.trim() || null,
+              email: emailTrimmed,
               latitude: row.latitud ? Number(row.latitud) : null,
               longitude: row.longitud ? Number(row.longitud) : null,
               notes: row.notas?.trim() || null,
             },
           });
           results.customersCreated++;
+        } else if (cedulaTrimmed && !customer.cedula) {
+          // Update existing customer with cedula if they don't have one
+          customer = await prisma.customer.update({
+            where: { id: customer.id },
+            data: { cedula: cedulaTrimmed },
+          });
         }
 
         // Find courier if specified
@@ -161,11 +172,12 @@ export async function getImportTemplate(_req: AuthRequest, res: Response): Promi
     const templateData = [
       {
         nombre: 'Juan Pérez',
-        telefono: '5551234567',
-        direccion: 'Calle Principal 123, Colonia Centro',
+        telefono: '65551234',
+        cedula: '8-123-4567',
+        direccion: 'Calle Principal 123, Ciudad de Panamá',
         email: 'juan@email.com',
-        latitud: 19.4326,
-        longitud: -99.1332,
+        latitud: 9.0012,
+        longitud: -79.4988,
         notas: 'Casa blanca con portón negro',
         descripcion: 'Paquete pequeño',
         detalles_paquete: 'Documentos importantes',
@@ -181,7 +193,8 @@ export async function getImportTemplate(_req: AuthRequest, res: Response): Promi
     // Set column widths
     worksheet['!cols'] = [
       { wch: 20 }, // nombre
-      { wch: 15 }, // telefono
+      { wch: 12 }, // telefono
+      { wch: 15 }, // cedula
       { wch: 40 }, // direccion
       { wch: 25 }, // email
       { wch: 12 }, // latitud

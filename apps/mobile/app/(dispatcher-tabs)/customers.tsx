@@ -10,6 +10,9 @@ import {
   TextInput,
   Alert,
   Platform,
+  SafeAreaView,
+  ScrollView,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { createCustomer, deleteCustomer, getCustomers, updateCustomer } from '@/lib/api/dispatcher';
 
@@ -107,13 +110,13 @@ export default function DispatcherCustomersScreen() {
     }
   };
 
-  const onDelete = async (id: string) => {
+  const onDeactivate = async (id: string) => {
     const confirmed = Platform.OS === 'web'
-      ? window.confirm('¿Eliminar cliente?')
+      ? window.confirm('¿Desactivar cliente?')
       : await new Promise<boolean>((resolve) => {
-          Alert.alert('Eliminar', '¿Eliminar cliente?', [
+          Alert.alert('Desactivar', '¿Desactivar cliente?', [
             { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Eliminar', style: 'destructive', onPress: () => resolve(true) },
+            { text: 'Desactivar', style: 'destructive', onPress: () => resolve(true) },
           ]);
         });
     if (!confirmed) return;
@@ -122,7 +125,7 @@ export default function DispatcherCustomersScreen() {
       await refresh();
     } catch (e: any) {
       console.error(e);
-      const msg = e?.response?.data?.error || 'Error eliminando cliente';
+      const msg = e?.response?.data?.error || 'Error desactivando cliente';
       showAlert('Error', msg);
     }
   };
@@ -158,8 +161,8 @@ export default function DispatcherCustomersScreen() {
               <TouchableOpacity onPress={() => openEdit(item)}>
                 <Text style={styles.linkText}>Editar</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => onDelete(item.id)}>
-                <Text style={styles.dangerText}>Eliminar</Text>
+              <TouchableOpacity onPress={() => onDeactivate(item.id)}>
+                <Text style={styles.dangerText}>Desactivar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -167,42 +170,46 @@ export default function DispatcherCustomersScreen() {
         ListEmptyComponent={<Text style={styles.empty}>No hay clientes</Text>}
       />
 
-      <Modal visible={createOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Crear cliente</Text>
-            <TextInput placeholder="Nombre" value={name} onChangeText={setName} style={styles.input} />
-            <TextInput placeholder="Teléfono" value={phone} onChangeText={setPhone} style={styles.input} />
-            <TextInput placeholder="Dirección" value={address} onChangeText={setAddress} style={styles.input} />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCreateOpen(false)}>
-                <Text style={styles.secondaryBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={submitCreate}>
-                <Text style={styles.primaryBtnText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      <Modal visible={createOpen} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.fullScreenModal}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>Crear cliente</Text>
+              <TextInput placeholder="Nombre" value={name} onChangeText={setName} style={styles.input} />
+              <TextInput placeholder="Teléfono" value={phone} onChangeText={setPhone} style={styles.input} />
+              <TextInput placeholder="Dirección" value={address} onChangeText={setAddress} style={styles.input} />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCreateOpen(false)}>
+                  <Text style={styles.secondaryBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={submitCreate}>
+                  <Text style={styles.primaryBtnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
 
-      <Modal visible={editOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Editar cliente</Text>
-            <TextInput placeholder="Nombre" value={editName} onChangeText={setEditName} style={styles.input} />
-            <TextInput placeholder="Teléfono" value={editPhone} onChangeText={setEditPhone} style={styles.input} />
-            <TextInput placeholder="Dirección" value={editAddress} onChangeText={setEditAddress} style={styles.input} />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setEditOpen(false)}>
-                <Text style={styles.secondaryBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={submitEdit}>
-                <Text style={styles.primaryBtnText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      <Modal visible={editOpen} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.fullScreenModal}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>Editar cliente</Text>
+              <TextInput placeholder="Nombre" value={editName} onChangeText={setEditName} style={styles.input} />
+              <TextInput placeholder="Teléfono" value={editPhone} onChangeText={setEditPhone} style={styles.input} />
+              <TextInput placeholder="Dirección" value={editAddress} onChangeText={setEditAddress} style={styles.input} />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setEditOpen(false)}>
+                  <Text style={styles.secondaryBtnText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={submitEdit}>
+                  <Text style={styles.primaryBtnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -225,6 +232,8 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: '#111827', fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 16 },
   modalCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14 },
+  fullScreenModal: { flex: 1, backgroundColor: '#F3F4F6' },
+  modalScroll: { padding: 16, paddingBottom: 40 },
   modalTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 10 },
   input: { backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },

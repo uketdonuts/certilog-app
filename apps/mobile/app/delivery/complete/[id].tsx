@@ -107,16 +107,13 @@ export default function CompleteDeliveryScreen() {
   };
 
   const handleNextFromRating = () => {
-    if (rating === 0) {
-      Alert.alert('Error', 'Por favor seleccione una calificación del 1 al 10');
-      return;
-    }
+    // Rating is optional, proceed to confirm
     setStep('confirm');
   };
 
   const handleSubmit = async () => {
-    if (photos.length === 0 || !signature || rating === 0) {
-      Alert.alert('Error', 'Se requiere foto, firma y calificación');
+    if (photos.length === 0 || !signature) {
+      Alert.alert('Error', 'Se requiere foto y firma');
       return;
     }
 
@@ -157,7 +154,7 @@ export default function CompleteDeliveryScreen() {
         deliveryLng: location!.longitude,
         deliveryNotes: notes || undefined,
         extraPhotoUrls: uploadResults.map((r) => r.url),
-        rating,
+        rating: rating > 0 ? rating : undefined,
       });
 
       // Refresh tracking to stop it since delivery is complete
@@ -310,7 +307,7 @@ export default function CompleteDeliveryScreen() {
         <Ionicons name="star" size={48} color="#FBBF24" />
         <Text style={styles.stepTitle}>Calificación</Text>
         <Text style={styles.stepDescription}>
-          ¿Cómo calificarías esta entrega? (Obligatorio)
+          ¿Cómo calificarías esta entrega? (Opcional)
         </Text>
       </View>
 
@@ -330,11 +327,10 @@ export default function CompleteDeliveryScreen() {
       )}
 
       <TouchableOpacity
-        style={[styles.actionButton, styles.nextButton, rating === 0 && styles.buttonDisabled]}
+        style={[styles.actionButton, styles.nextButton]}
         onPress={handleNextFromRating}
-        disabled={rating === 0}
       >
-        <Text style={styles.actionButtonText}>Siguiente</Text>
+        <Text style={styles.actionButtonText}>{rating > 0 ? 'Siguiente' : 'Omitir'}</Text>
       </TouchableOpacity>
     </View>
   );

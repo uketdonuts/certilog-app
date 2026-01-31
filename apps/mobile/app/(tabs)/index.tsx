@@ -39,7 +39,8 @@ export default function DeliveriesScreen() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filter, setFilter] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string | null>('ASSIGNED');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const fetchDeliveries = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
@@ -134,6 +135,8 @@ export default function DeliveriesScreen() {
     { key: 'DELIVERED', label: 'Entregadas' },
   ];
 
+  const currentLabel = filters.find((f) => f.key === filter)?.label || 'Filtrar';
+
   if (isLoading && !isRefreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -144,24 +147,31 @@ export default function DeliveriesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Filter tabs */}
+      {/* Filter dropdown */}
       <View style={styles.filterContainer}>
-        {filters.map((f) => (
-          <TouchableOpacity
-            key={f.key ?? 'all'}
-            style={[styles.filterTab, filter === f.key && styles.filterTabActive]}
-            onPress={() => setFilter(f.key)}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === f.key && styles.filterTextActive,
-              ]}
-            >
-              {f.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={styles.dropdownButton}
+          onPress={() => setDropdownOpen((s) => !s)}
+        >
+          <Text style={styles.dropdownText}>{currentLabel}</Text>
+          <Ionicons name={dropdownOpen ? 'chevron-up' : 'chevron-down'} size={20} color="#6B7280" />
+        </TouchableOpacity>
+        {dropdownOpen && (
+          <View style={styles.dropdownMenu}>
+            {filters.map((f) => (
+              <TouchableOpacity
+                key={f.key ?? 'all'}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setFilter(f.key);
+                  setDropdownOpen(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>{f.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -207,6 +217,48 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+    zIndex: 1000,
+    elevation: 10,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    flex: 1,
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 50,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    color: '#1F2937',
   },
   filterTab: {
     paddingHorizontal: 16,

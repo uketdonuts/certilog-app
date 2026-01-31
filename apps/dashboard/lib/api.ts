@@ -103,6 +103,8 @@ export async function getDeliveries(params?: {
   status?: string;
   courierId?: string;
   search?: string;
+  createdAtFrom?: string;
+  createdAtTo?: string;
 }) {
   const response = await api.get('/api/deliveries', { params });
   return response.data.data;
@@ -181,8 +183,12 @@ export async function updateCustomer(
   return response.data.data;
 }
 
-export async function deleteCustomer(id: string) {
+export async function deactivateCustomer(id: string) {
   await api.delete(`/api/customers/${id}`);
+}
+
+export async function deleteCustomerPermanently(id: string) {
+  await api.delete(`/api/customers/${id}?permanent=true`);
 }
 
 // Couriers
@@ -211,6 +217,10 @@ export async function deactivateUser(id: string) {
   await api.delete(`/api/users/${id}`);
 }
 
+export async function deleteUserPermanently(id: string) {
+  await api.delete(`/api/users/${id}?permanent=true`);
+}
+
 export async function createUser(data: {
   email?: string;
   username?: string;
@@ -225,10 +235,192 @@ export async function createUser(data: {
   return response.data.data;
 }
 
+// Logs
+export async function getUserLogs(id: string, params?: { limit?: number; offset?: number }) {
+  const response = await api.get(`/api/logs/users/${id}`, { params });
+  return response.data.data;
+}
+
+export async function getCustomerLogs(id: string, params?: { limit?: number; offset?: number }) {
+  const response = await api.get(`/api/logs/customers/${id}`, { params });
+  return response.data.data;
+}
+
 // Locations
 export async function getCouriersLocations() {
   const response = await api.get('/api/locations/couriers');
   return response.data.data;
+}
+
+// Fleet - Vehicles
+export async function getVehicles(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/vehicles', { params });
+  return response.data.data;
+}
+
+export async function createVehicle(data: {
+  licensePlate: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  vin?: string;
+}) {
+  const response = await api.post('/api/vehicles', data);
+  return response.data.data;
+}
+
+export async function updateVehicle(id: string, data: Partial<{ licensePlate: string; make?: string; model?: string; year?: number; vin?: string }>) {
+  const response = await api.put(`/api/vehicles/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteVehicle(id: string) {
+  await api.delete(`/api/vehicles/${id}`);
+}
+
+// Gas reports
+export async function getGasReports(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/gas', { params });
+  return response.data.data;
+}
+
+export async function createGasReport(data: { vehicleId: string; liters: number; cost?: number; odometer?: number; fuelType?: string; notes?: string }) {
+  const response = await api.post('/api/gas', data);
+  return response.data.data;
+}
+
+export async function updateGasReport(id: string, data: Partial<{ vehicleId: string; liters: number; cost?: number; odometer?: number; fuelType?: string; notes?: string }>) {
+  const response = await api.put(`/api/gas/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteGasReport(id: string) {
+  await api.delete(`/api/gas/${id}`);
+}
+
+// Attendance records (asistencia, ausencias, incapacidades, tardanzas)
+export async function getAttendanceRecords(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/attendance', { params });
+  return response.data.data;
+}
+
+export async function createAttendanceRecord(data: {
+  userId: string;
+  type: 'ATTENDANCE' | 'ABSENCE' | 'VACATION' | 'DISABILITY' | 'TARDY' | 'OVERTIME';
+  date: string;
+  minutesLate?: number;
+  reason?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+}) {
+  const response = await api.post('/api/attendance', data);
+  return response.data.data;
+}
+
+export async function updateAttendanceRecord(
+  id: string,
+  data: Partial<{
+    userId: string;
+    type: 'ATTENDANCE' | 'ABSENCE' | 'VACATION' | 'DISABILITY' | 'TARDY' | 'OVERTIME';
+    date: string;
+    minutesLate?: number;
+    reason?: string;
+    attachmentUrl?: string;
+    attachmentName?: string;
+  }>
+) {
+  const response = await api.put(`/api/attendance/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteAttendanceRecord(id: string) {
+  await api.delete(`/api/attendance/${id}`);
+}
+
+// Aliases for backward compatibility
+export const getAbsences = getAttendanceRecords;
+export const createAbsence = createAttendanceRecord;
+export const updateAbsence = updateAttendanceRecord;
+export const deleteAbsence = deleteAttendanceRecord;
+
+// Fleet maintenance
+export async function getFleetMaintenance(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/fleet-maintenance', { params });
+  return response.data.data;
+}
+
+export async function createFleetMaintenance(data: { vehicleId: string; description?: string; severity?: string; reportedAt?: string }) {
+  const response = await api.post('/api/fleet-maintenance', data);
+  return response.data.data;
+}
+
+export async function updateFleetMaintenance(id: string, data: Partial<{ vehicleId: string; description?: string; severity?: string; reportedAt?: string }>) {
+  const response = await api.put(`/api/fleet-maintenance/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteFleetMaintenance(id: string) {
+  await api.delete(`/api/fleet-maintenance/${id}`);
+}
+
+// Preventive maintenance
+export async function getPreventives(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/preventive', { params });
+  return response.data.data;
+}
+
+export async function createPreventive(data: { vehicleId: string; scheduledAt: string; type?: string; notes?: string }) {
+  const response = await api.post('/api/preventive', data);
+  return response.data.data;
+}
+
+export async function updatePreventive(id: string, data: Partial<{ vehicleId: string; scheduledAt?: string; performedAt?: string; type?: string; notes?: string }>) {
+  const response = await api.put(`/api/preventive/${id}`, data);
+  return response.data.data;
+}
+
+export async function deletePreventive(id: string) {
+  await api.delete(`/api/preventive/${id}`);
+}
+
+// Repairs
+export async function getRepairs(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/repairs', { params });
+  return response.data.data;
+}
+
+export async function createRepair(data: { vehicleId: string; description?: string; cost?: number; performedAt?: string }) {
+  const response = await api.post('/api/repairs', data);
+  return response.data.data;
+}
+
+export async function updateRepair(id: string, data: Partial<{ vehicleId: string; description?: string; cost?: number; performedAt?: string }>) {
+  const response = await api.put(`/api/repairs/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteRepair(id: string) {
+  await api.delete(`/api/repairs/${id}`);
+}
+
+// Tire semaphore
+export async function getTireSemaphores(params?: { page?: number; limit?: number }) {
+  const response = await api.get('/api/tire-semaphore', { params });
+  return response.data.data;
+}
+
+export async function createTireSemaphore(data: { vehicleId: string; frontLeft?: string; frontRight?: string; rearLeft?: string; rearRight?: string; recordedAt?: string }) {
+  const response = await api.post('/api/tire-semaphore', data);
+  return response.data.data;
+}
+
+export async function updateTireSemaphore(id: string, data: Partial<{ vehicleId: string; frontLeft?: string; frontRight?: string; rearLeft?: string; rearRight?: string; recordedAt?: string }>) {
+  const response = await api.put(`/api/tire-semaphore/${id}`, data);
+  return response.data.data;
+}
+
+export async function deleteTireSemaphore(id: string) {
+  await api.delete(`/api/tire-semaphore/${id}`);
 }
 
 export async function getCourierLocationHistory(
@@ -271,6 +463,29 @@ export async function downloadImportTemplate(): Promise<void> {
   const link = document.createElement('a');
   link.href = url;
   link.setAttribute('download', 'plantilla_entregas.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// Export deliveries to Excel
+export async function exportDeliveriesToExcel(params?: {
+  status?: string;
+  search?: string;
+  createdAtFrom?: string;
+  createdAtTo?: string;
+}): Promise<void> {
+  const response = await api.get('/api/deliveries/export', {
+    params,
+    responseType: 'blob',
+  });
+
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  const date = new Date().toISOString().split('T')[0];
+  link.setAttribute('download', `entregas_${date}.xlsx`);
   document.body.appendChild(link);
   link.click();
   link.remove();

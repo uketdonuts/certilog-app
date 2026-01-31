@@ -22,6 +22,21 @@ export const registerSchema = z.object({
   fullName: z.string().min(2).max(100),
   phone: z.string().optional(),
   role: z.nativeEnum(Role).default(Role.COURIER),
+  // Courier/Helper specific fields
+  firstName: z.string().max(100).optional(),
+  middleName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
+  secondLastName: z.string().max(100).optional(),
+  gender: z.enum(['M', 'F']).optional(),
+  birthDate: z.string().datetime().optional(),
+  personalPhone: z.string().max(20).optional(),
+  basePhone: z.string().max(20).optional(),
+  emergencyPhone: z.string().max(20).optional(),
+  licensePlate: z.string().max(20).optional(),
+  insurancePolicy: z.string().max(100).optional(),
+  insurerPhone: z.string().max(20).optional(),
+  insurerName: z.string().max(100).optional(),
+  nextWeightReview: z.string().datetime().optional(),
 }).refine(data => data.password || data.pin, {
   message: 'Se requiere password o PIN',
 });
@@ -36,6 +51,21 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   pin: z.string().min(4).max(6).optional(),
   password: z.string().min(6).optional(),
+  // Courier/Helper specific fields
+  firstName: z.string().max(100).optional(),
+  middleName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
+  secondLastName: z.string().max(100).optional(),
+  gender: z.enum(['M', 'F']).optional(),
+  birthDate: z.string().datetime().optional(),
+  personalPhone: z.string().max(20).optional(),
+  basePhone: z.string().max(20).optional(),
+  emergencyPhone: z.string().max(20).optional(),
+  licensePlate: z.string().max(20).optional(),
+  insurancePolicy: z.string().max(100).optional(),
+  insurerPhone: z.string().max(20).optional(),
+  insurerName: z.string().max(100).optional(),
+  nextWeightReview: z.string().datetime().optional(),
 });
 
 export const updateFcmTokenSchema = z.object({
@@ -46,6 +76,7 @@ export const updateFcmTokenSchema = z.object({
 export const createCustomerSchema = z.object({
   name: z.string().min(2).max(100),
   phone: z.string().min(7).max(20),
+  cedula: z.string().min(5).max(20).optional(), // Panama identification number
   email: z.string().email().optional(),
   address: z.string().min(5).max(500),
   latitude: z.number().min(-90).max(90).optional(),
@@ -53,7 +84,9 @@ export const createCustomerSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
-export const updateCustomerSchema = createCustomerSchema.partial();
+export const updateCustomerSchema = createCustomerSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
 
 // Delivery schemas
 export const createDeliverySchema = z.object({
@@ -138,5 +171,100 @@ export const deliveryFiltersSchema = z.object({
   priority: z.nativeEnum(Priority).optional(),
   fromDate: z.string().datetime().optional(),
   toDate: z.string().datetime().optional(),
+  createdAtFrom: z.string().datetime().optional(),
+  createdAtTo: z.string().datetime().optional(),
   search: z.string().optional(),
 });
+
+// Fleet / vehicle schemas
+export const createVehicleSchema = z.object({
+  licensePlate: z.string().min(1).max(20),
+  make: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
+  year: z.coerce.number().int().optional(),
+  vin: z.string().max(50).optional(),
+  color: z.string().max(50).optional(),
+  driverId: z.string().uuid().optional(),
+});
+
+export const updateVehicleSchema = createVehicleSchema.partial();
+
+// Gas report
+export const createGasReportSchema = z.object({
+  vehicleId: z.string().uuid(),
+  reportedBy: z.string().uuid().optional(),
+  date: z.string().datetime().optional(),
+  liters: z.coerce.number().positive(),
+  cost: z.coerce.number().optional(),
+  odometer: z.coerce.number().int().optional(),
+  fuelType: z.string().optional(),
+  receiptUrl: z.string().optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+// Attendance records (asistencia, ausencia, vacaciones, incapacidad, tardanza)
+export const createAttendanceSchema = z.object({
+  userId: z.string().uuid(),
+  date: z.string().datetime(),
+  type: z.enum(['ATTENDANCE', 'ABSENCE', 'VACATION', 'DISABILITY', 'TARDY']),
+  minutesLate: z.coerce.number().int().optional(),
+  reason: z.string().max(1000).optional(),
+  attachmentUrl: z.string().optional(),
+  attachmentName: z.string().optional(),
+  reportedBy: z.string().uuid().optional(),
+  status: z.string().optional(),
+});
+
+export const updateAttendanceSchema = createAttendanceSchema.partial();
+
+// Aliases for backward compatibility
+export const createAbsenceSchema = createAttendanceSchema;
+export const updateAbsenceSchema = updateAttendanceSchema;
+
+// Fleet maintenance
+export const createFleetMaintenanceSchema = z.object({
+  vehicleId: z.string().uuid(),
+  reportedBy: z.string().uuid().optional(),
+  date: z.string().datetime().optional(),
+  description: z.string().min(1).max(2000),
+  severity: z.string().optional(),
+  attachments: z.any().optional(),
+  status: z.enum(['OPEN','IN_PROGRESS','CLOSED']).optional(),
+});
+
+export const updateFleetMaintenanceSchema = createFleetMaintenanceSchema.partial();
+
+// Preventive maintenance
+export const createPreventiveSchema = z.object({
+  vehicleId: z.string().uuid(),
+  scheduledAt: z.string().datetime(),
+  performedAt: z.string().datetime().optional(),
+  type: z.string().optional(),
+  performedBy: z.string().uuid().optional(),
+  notes: z.string().optional(),
+});
+
+export const updatePreventiveSchema = createPreventiveSchema.partial();
+
+// Repair
+export const createRepairSchema = z.object({
+  vehicleId: z.string().uuid(),
+  date: z.string().datetime().optional(),
+  performedBy: z.string().uuid().optional(),
+  description: z.string().min(1).max(2000),
+  cost: z.coerce.number().optional(),
+  attachments: z.any().optional(),
+});
+
+// Tire semaphore
+export const createTireSemaphoreSchema = z.object({
+  vehicleId: z.string().uuid(),
+  inspectorId: z.string().uuid().optional(),
+  frontLeft: z.enum(['GOOD','WARNING','REPLACE']).optional(),
+  frontRight: z.enum(['GOOD','WARNING','REPLACE']).optional(),
+  rearLeft: z.enum(['GOOD','WARNING','REPLACE']).optional(),
+  rearRight: z.enum(['GOOD','WARNING','REPLACE']).optional(),
+  notes: z.string().optional(),
+  recordedAt: z.string().datetime().optional(),
+});
+

@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { cleanRouteTrace } from "@/lib/utils/routeTrace";
 
 const AnyMapContainer: any = MapContainer;
+const AnyCircleMarker: any = CircleMarker;
 
 type LatLngTuple = [number, number];
 
 type RoutePoint = {
   lat: number;
   lng: number;
+  recordedAt?: string;
 };
 
 function FitBounds({ points }: { points: LatLngTuple[] }) {
@@ -46,29 +49,66 @@ export default function DeliveryRouteMapClient({
   destination?: { lat: number; lng: number; label?: string } | null;
 }) {
   const latLngPoints = useMemo(() => {
-    return (Array.isArray(points) ? points : [])
-      .map((p) => [Number(p.lat), Number(p.lng)] as LatLngTuple)
-      .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    const cleaned = cleanRouteTrace(
+      (Array.isArray(points) ? points : []).map((p) => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        recordedAt: p.recordedAt,
+      })),
+      {
+        maxSpeedKmh: 160,
+        maxJumpMeters: 400,
+        minStepMeters: 2,
+        smoothingWindow: 3,
+      }
+    );
+
+    return cleaned.map((p) => [p.lat, p.lng] as LatLngTuple);
   }, [points]);
 
   const start = latLngPoints.length ? latLngPoints[0] : null;
   const end = latLngPoints.length ? latLngPoints[latLngPoints.length - 1] : null;
 
-  const center: LatLngTuple = start ?? [18.4861, -69.9312];
+  const center: LatLngTuple = start ?? [9.0, -79.5]; // Panama City
 
   return (
     <div className="h-72 w-full rounded-lg overflow-hidden">
       <AnyMapContainer center={center} zoom={13} style={{ width: "100%", height: "100%" }}>
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
         <FitBounds points={latLngPoints} />
 
         {latLngPoints.length >= 2 ? (
-          <Polyline positions={latLngPoints} pathOptions={{ color: "#2563eb", weight: 4, opacity: 0.9 }} />
+          <Polyline
+            positions={latLngPoints}
+            pathOptions={{
+              color: "#2563eb",
+              weight: 5,
+              opacity: 0.9,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
         ) : null}
 
-        {start ? <Marker position={start} /> : null}
-        {end && (!start || end[0] !== start[0] || end[1] !== start[1]) ? <Marker position={end} /> : null}
+        {/* Start marker - green circle like mobile app */}
+        {start ? (
+          <AnyCircleMarker
+            center={start}
+            radius={6}
+            pathOptions={{ color: "#16a34a", fillColor: "#22c55e", fillOpacity: 1, weight: 2 }}
+          />
+        ) : null}
 
+        {/* End marker - red circle like mobile app */}
+        {end && (!start || end[0] !== start[0] || end[1] !== start[1]) ? (
+          <AnyCircleMarker
+            center={end}
+            radius={6}
+            pathOptions={{ color: "#dc2626", fillColor: "#ef4444", fillOpacity: 1, weight: 2 }}
+          />
+        ) : null}
+
+        {/* Destination marker */}
         {destination && Number.isFinite(destination.lat) && Number.isFinite(destination.lng) ? (
           <Marker position={[destination.lat, destination.lng]} />
         ) : null}

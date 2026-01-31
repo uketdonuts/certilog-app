@@ -25,19 +25,23 @@ function resolveApkPath(versionInfo: VersionInfo | null) {
   const publicDir = path.join(process.cwd(), 'public');
   const downloadsDir = path.join(publicDir, 'downloads');
 
-  const latestPath = path.join(downloadsDir, 'certilog-latest.apk');
-  if (fs.existsSync(latestPath)) {
-    const filename = versionInfo?.version
-      ? `CertiLog-v${versionInfo.version}.apk`
-      : 'CertiLog.apk';
-    return { filePath: latestPath, downloadName: filename };
-  }
-
+  // First try versioned APK from version info
   if (versionInfo?.version) {
     const versionedPath = path.join(downloadsDir, `certilog-v${versionInfo.version}.apk`);
     if (fs.existsSync(versionedPath)) {
       return { filePath: versionedPath, downloadName: `CertiLog-v${versionInfo.version}.apk` };
     }
+  }
+
+  // Fallback: find any APK in the downloads directory (should only be one after build)
+  const files = fs.readdirSync(downloadsDir).filter(f => f.endsWith('.apk') && !f.includes('history'));
+  if (files.length > 0) {
+    const apkFile = files[0];
+    const filePath = path.join(downloadsDir, apkFile);
+    const downloadName = versionInfo?.version
+      ? `CertiLog-v${versionInfo.version}.apk`
+      : apkFile.replace('certilog-', 'CertiLog-');
+    return { filePath, downloadName };
   }
 
   return null;
@@ -47,7 +51,11 @@ function readVersionInfo(): VersionInfo | null {
   try {
     const versionFile = path.join(process.cwd(), 'public', 'app-version.json');
     if (!fs.existsSync(versionFile)) return null;
-    const raw = fs.readFileSync(versionFile, 'utf8');
+    let raw = fs.readFileSync(versionFile, 'utf8');
+    // Remove BOM (Byte Order Mark) if present - common with Windows-generated files
+    if (raw.charCodeAt(0) === 0xfeff) {
+      raw = raw.slice(1);
+    }
     return JSON.parse(raw) as VersionInfo;
   } catch {
     return null;
@@ -61,18 +69,7 @@ export async function GET() {
     return new Response('APK not available', { status: 404 });
   }
 
-  // If we resolved the "latest" file but we have a version, redirect to the
-  // versioned static file path. This avoids stale upstream caches returning an
-  // old Content-Disposition header (which caused downloads to be named
-  // 'CertiLog.apk'). Static files are served from /downloads and will use the
-  // real filename in the URL.
-  const downloadsDir = path.join(process.cwd(), 'public', 'downloads');
-  const isLatest = path.basename(resolved.filePath).toLowerCase() === 'certilog-latest.apk';
-  if (isLatest && versionInfo?.version) {
-    const target = `/downloads/certilog-v${versionInfo.version}.apk`;
-    return Response.redirect(target, 302);
-  }
-
+  // Serve the file directly from filesystem - no redirects to avoid static cache issues
   const stat = fs.statSync(resolved.filePath);
   const nodeStream = fs.createReadStream(resolved.filePath);
   const stream = Readable.toWeb(nodeStream) as unknown as ReadableStream;

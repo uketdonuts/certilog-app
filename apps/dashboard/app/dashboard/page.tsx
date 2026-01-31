@@ -57,8 +57,11 @@ export default function DashboardPage() {
         ]);
 
         setStats(statsData);
-        setRecentDeliveries(deliveriesData.data);
-        setCouriers(couriersData);
+        // Handle paginated response: { data: [...], total, page, ... }
+        const deliveriesList = Array.isArray(deliveriesData?.data) ? deliveriesData.data : Array.isArray(deliveriesData) ? deliveriesData : [];
+        setRecentDeliveries(deliveriesList);
+        const couriersList = Array.isArray(couriersData) ? couriersData : [];
+        setCouriers(couriersList);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {

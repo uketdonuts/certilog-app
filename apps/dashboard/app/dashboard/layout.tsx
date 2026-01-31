@@ -7,11 +7,14 @@ import {
   HomeIcon,
   TruckIcon,
   UsersIcon,
+  UserGroupIcon,
   MapIcon,
-  Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
+  ClockIcon,
+  ExclamationCircleIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import { getStoredUser, logout } from '@/lib/api';
 
@@ -19,7 +22,14 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Entregas', href: '/dashboard/deliveries', icon: TruckIcon },
   { name: 'Clientes', href: '/dashboard/customers', icon: UsersIcon },
-  { name: 'Usuarios', href: '/dashboard/users', icon: Cog6ToothIcon },
+  { name: 'Usuarios', href: '/dashboard/users', icon: UserGroupIcon },
+  { name: 'Vehículos', href: '/dashboard/vehicles', icon: TruckIcon },
+  { name: 'Gasolina', href: '/dashboard/gas', icon: TruckIcon },
+  { name: 'Asistencia', href: '/dashboard/absences', icon: ClockIcon },
+  { name: 'Mantenimiento', href: '/dashboard/fleet-maintenance', icon: ExclamationCircleIcon },
+  { name: 'Preventivo', href: '/dashboard/preventive', icon: CheckCircleIcon },
+  { name: 'Reparaciones', href: '/dashboard/repairs', icon: ExclamationCircleIcon },
+  { name: 'Semáforo de llantas', href: '/dashboard/tire-semaphore', icon: MapIcon },
   { name: 'Mapa', href: '/dashboard/map', icon: MapIcon },
 ];
 

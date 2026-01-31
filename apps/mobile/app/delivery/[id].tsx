@@ -7,13 +7,19 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Share,
+  Clipboard,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { getDeliveryById, Delivery, startDelivery } from '@/lib/api/deliveries';
 import { openWhatsApp, callPhone } from '@/lib/services/whatsapp';
 import { openMapsNavigation } from '@/lib/services/location';
 import { useAuth } from '@/lib/context/AuthContext';
+
+// Get dashboard URL from environment or use default (testing tunnel)
+const DASHBOARD_URL = Constants.expoConfig?.extra?.dashboardUrl || 'https://jtfrcpdb-3000.use2.devtunnels.ms/';
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: '#FFA500',
@@ -103,10 +109,14 @@ export default function DeliveryDetailScreen() {
       return;
     }
 
-    openWhatsApp(
-      delivery.customer.phone,
-      `Hola ${delivery.customer.name}, soy el mensajero de CertiLog. Voy en camino con su entrega.`
-    );
+    // Include tracking link if available
+    let message = `Hola ${delivery.customer.name}, soy el mensajero de CertiLog. Voy en camino con su entrega.`;
+    if (delivery.publicTrackingToken) {
+      const trackingUrl = `${DASHBOARD_URL}/track/${delivery.publicTrackingToken}`;
+      message += `\n\nPuede seguir su entrega en tiempo real aquí:\n${trackingUrl}`;
+    }
+
+    openWhatsApp(delivery.customer.phone, message);
   };
 
   const handleCall = () => {
@@ -116,6 +126,48 @@ export default function DeliveryDetailScreen() {
     }
 
     callPhone(delivery.customer.phone);
+  };
+
+  const handleShareTracking = async () => {
+    if (!delivery?.publicTrackingToken) {
+      Alert.alert('Error', 'No hay enlace de seguimiento disponible');
+      return;
+    }
+
+    const trackingUrl = `${DASHBOARD_URL}/track/${delivery.publicTrackingToken}`;
+    const message = `Hola ${delivery.customer.name}, puede seguir su entrega en tiempo real aquí:\n${trackingUrl}`;
+
+    try {
+      await Share.share({
+        message,
+        url: trackingUrl, // iOS uses this
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
+  const handleShareViaWhatsApp = () => {
+    if (!delivery?.publicTrackingToken || !delivery?.customer.phone) {
+      Alert.alert('Error', 'No hay enlace de seguimiento o teléfono disponible');
+      return;
+    }
+
+    const trackingUrl = `${DASHBOARD_URL}/track/${delivery.publicTrackingToken}`;
+    const message = `Hola ${delivery.customer.name}, puede seguir su entrega en tiempo real aquí:\n${trackingUrl}`;
+
+    openWhatsApp(delivery.customer.phone, message);
+  };
+
+  const handleCopyTrackingUrl = async () => {
+    if (!delivery?.publicTrackingToken) {
+      Alert.alert('Error', 'No hay enlace de seguimiento disponible');
+      return;
+    }
+
+    const trackingUrl = `${DASHBOARD_URL}/track/${delivery.publicTrackingToken}`;
+    Clipboard.setString(trackingUrl);
+    Alert.alert('Copiado', 'Enlace de seguimiento copiado al portapapeles');
   };
 
   if (isLoading) {
@@ -209,6 +261,41 @@ export default function DeliveryDetailScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Share Tracking */}
+        {delivery.publicTrackingToken && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Compartir Seguimiento</Text>
+            <View style={styles.shareCard}>
+              <Text style={styles.shareDescription}>
+                Envía el enlace de seguimiento al cliente para que pueda ver el estado de su entrega en tiempo real.
+              </Text>
+              <View style={styles.shareButtons}>
+                <TouchableOpacity
+                  style={[styles.shareButton, styles.whatsappShareButton]}
+                  onPress={handleShareViaWhatsApp}
+                >
+                  <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                  <Text style={styles.shareButtonText}>WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shareButton, styles.genericShareButton]}
+                  onPress={handleShareTracking}
+                >
+                  <Ionicons name="share-outline" size={20} color="#fff" />
+                  <Text style={styles.shareButtonText}>Compartir</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={handleCopyTrackingUrl}
+              >
+                <Ionicons name="copy-outline" size={18} color="#6B7280" />
+                <Text style={styles.copyButtonText}>Copiar enlace</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Package Details */}
         {(delivery.description || delivery.packageDetails) && (
@@ -466,5 +553,55 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  shareCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  shareDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  shareButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  shareButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  whatsappShareButton: {
+    backgroundColor: '#25D366',
+  },
+  genericShareButton: {
+    backgroundColor: '#3B82F6',
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    gap: 6,
+  },
+  copyButtonText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

@@ -1,12 +1,35 @@
 import * as Linking from 'expo-linking';
 
-export async function openWhatsApp(phone: string, message?: string): Promise<void> {
-  // Clean phone number (only digits)
+/**
+ * Format phone number for Panama (+507)
+ * Panama mobile numbers: 8 digits starting with 6
+ * Panama landline: 8 digits starting with 2 or 3
+ */
+function formatPanamaPhone(phone: string): string {
   const cleanPhone = phone.replace(/\D/g, '');
 
-  // Ensure country code (assuming Dominican Republic +1 if no code)
-  // Adjust this based on your target country
-  const fullPhone = cleanPhone.length === 10 ? `1${cleanPhone}` : cleanPhone;
+  // If 8 digits (Panama local number), add country code
+  if (cleanPhone.length === 8) {
+    return `507${cleanPhone}`;
+  }
+
+  // If already has Panama country code (11 digits starting with 507)
+  if (cleanPhone.length === 11 && cleanPhone.startsWith('507')) {
+    return cleanPhone;
+  }
+
+  // If starts with +507, remove the + (already handled by regex)
+  if (cleanPhone.startsWith('507') && cleanPhone.length >= 11) {
+    return cleanPhone;
+  }
+
+  // Return as-is for other formats (international numbers)
+  return cleanPhone;
+}
+
+export async function openWhatsApp(phone: string, message?: string): Promise<void> {
+  // Format for Panama
+  const fullPhone = formatPanamaPhone(phone);
 
   // Build URL
   const url = message

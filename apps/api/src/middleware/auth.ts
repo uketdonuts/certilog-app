@@ -60,7 +60,7 @@ export function requireAdminOrDispatcher(req: AuthRequest, res: Response, next: 
 }
 
 export function requireCourier(req: AuthRequest, res: Response, next: NextFunction): void {
-  requireRoles(Role.COURIER)(req, res, next);
+  requireRoles(Role.COURIER, Role.HELPER)(req, res, next);
 }
 
 // Optional auth - doesn't require token but will parse it if present

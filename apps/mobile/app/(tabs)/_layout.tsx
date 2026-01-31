@@ -1,13 +1,23 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect } from 'expo-router';
 import { useAuth } from '@/lib/context/AuthContext';
 
 export default function TabsLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  // Avoid rendering courier tabs until auth finishes loading to prevent
+  // briefly showing dispatcher screens when the user is unknown.
+  if (isLoading) return null;
 
   if (user && user.role !== 'COURIER') {
     return <Redirect href="/(dispatcher-tabs)" />;
+  }
+
+  // Debug: log auth state to help diagnose incorrect tab rendering
+  try {
+    console.log('[Layout][tabs] user:', JSON.stringify(user), 'isLoading:', isLoading);
+  } catch (e) {
+    console.log('[Layout][tabs] user (non-serializable)', user, 'isLoading:', isLoading);
   }
 
   return (
@@ -53,6 +63,19 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Usuarios',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
+          ),
+          // Hide the tab button entirely for couriers
+          tabBarButton: user?.role === 'COURIER' ? (() => null) : undefined,
+        }}
+      >
+        {() => <Redirect href="/(dispatcher-tabs)/users" />}
+      </Tabs.Screen>
     </Tabs>
   );
 }

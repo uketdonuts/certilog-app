@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  FlatList,
   TouchableOpacity,
   Linking,
   Alert,
@@ -13,6 +12,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { useLocalSearchParams } from 'expo-router';
 import { getDeliveryRoute, DeliveryRoutePoint } from '@/lib/api/deliveries';
+import { cleanRouteTrace } from '@/lib/utils/routeTrace';
 
 function safeJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, '\\u003c');
@@ -38,10 +38,22 @@ function buildRouteHtml(points: { lat: number; lng: number; recordedAt: string }
     <script>
       const coords = ${coordsJson};
       const map = L.map('map', { zoomControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '' }).addTo(map);
+      // CARTO Voyager: light, familiar (Google-ish) styling without an API key.
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+        subdomains: 'abcd',
+        attribution: '',
+      }).addTo(map);
 
       if (coords && coords.length) {
-        const polyline = L.polyline(coords, { color: '#2563eb', weight: 4, opacity: 0.9 }).addTo(map);
+        const polyline = L.polyline(coords, {
+          color: '#2563eb',
+          weight: 5,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+          smoothFactor: 1.2,
+        }).addTo(map);
         const start = coords[0];
         const end = coords[coords.length - 1];
         L.circleMarker(start, { radius: 6, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1 }).addTo(map);
@@ -99,9 +111,21 @@ export default function DeliveryRouteScreen() {
   }, [points]);
 
   const routeHtml = useMemo(() => {
-    const usable = points
-      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-      .map((p) => ({ lat: p.lat, lng: p.lng, recordedAt: p.recordedAt }));
+    const usable = cleanRouteTrace(
+      points.map((p) => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        recordedAt: p.recordedAt,
+        accuracy: p.accuracy,
+      })),
+      {
+        // Conservative defaults that remove "teleport" points and reduce jitter
+        maxSpeedKmh: 160,
+        maxJumpMeters: 400,
+        minStepMeters: 2,
+        smoothingWindow: 3,
+      }
+    ).map((p) => ({ lat: p.lat, lng: p.lng, recordedAt: p.recordedAt }));
     return buildRouteHtml(usable);
   }, [points]);
 
@@ -152,22 +176,6 @@ export default function DeliveryRouteScreen() {
       ) : (
         <Text style={styles.empty}>No hay puntos de ruta para esta entrega</Text>
       )}
-
-      <FlatList
-        data={points}
-        keyExtractor={(p) => p.id}
-        renderItem={({ item, index }) => (
-          <TouchableOpacity style={styles.pointRow} onPress={() => openMaps(item.lat, item.lng)}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pointTitle}>#{index + 1} ({item.lat.toFixed(5)}, {item.lng.toFixed(5)})</Text>
-              <Text style={styles.sub}>{new Date(item.recordedAt).toLocaleString()}</Text>
-            </View>
-            <Text style={styles.openLink}>Abrir</Text>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={<View />}
-        contentContainerStyle={{ paddingBottom: 24 }}
-      />
     </View>
   );
 }
@@ -184,8 +192,5 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   btn: { backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   btnText: { color: '#fff', fontWeight: '700' },
-  pointRow: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  pointTitle: { fontSize: 13, fontWeight: '800', color: '#111827' },
-  openLink: { fontSize: 12, fontWeight: '800', color: '#2563EB' },
   empty: { color: '#6B7280', paddingVertical: 12 },
 });

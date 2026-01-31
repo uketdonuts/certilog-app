@@ -76,3 +76,32 @@ export async function uploadVideo(req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ success: false, error: 'Error al subir el video' });
   }
 }
+
+export async function uploadAttendanceAttachment(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No se proporcionó ningún archivo' });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (req.file.size > 5 * 1024 * 1024) {
+      res.status(400).json({ success: false, error: 'El archivo no puede superar los 5MB' });
+      return;
+    }
+
+    const result = await uploadImage(req.file.buffer, 'attendance/attachments');
+
+    res.json({
+      success: true,
+      data: {
+        url: result.url,
+        publicId: result.publicId,
+        bytes: result.bytes,
+      },
+    });
+  } catch (error) {
+    console.error('Upload attendance attachment error:', error);
+    res.status(500).json({ success: false, error: 'Error al subir el archivo' });
+  }
+}

@@ -148,7 +148,13 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
       return;
     }
 
-    const { email, username, password, pin, fullName, phone, role } = validation.data;
+    const {
+      email, username, password, pin, fullName, phone, role,
+      // Courier/Helper specific fields
+      firstName, middleName, lastName, secondLastName,
+      gender, birthDate, personalPhone, basePhone, emergencyPhone,
+      licensePlate, insurancePolicy, insurerPhone, insurerName, nextWeightReview,
+    } = validation.data;
 
     // Dispatchers cannot create ADMIN users
     if (req.user?.role === Role.DISPATCHER && role === Role.ADMIN) {
@@ -186,6 +192,21 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
         fullName,
         phone,
         role,
+        // Courier/Helper specific fields
+        firstName,
+        middleName,
+        lastName,
+        secondLastName,
+        gender,
+        birthDate: birthDate ? new Date(birthDate) : undefined,
+        personalPhone,
+        basePhone,
+        emergencyPhone,
+        licensePlate,
+        insurancePolicy,
+        insurerPhone,
+        insurerName,
+        nextWeightReview: nextWeightReview ? new Date(nextWeightReview) : undefined,
       },
     });
 

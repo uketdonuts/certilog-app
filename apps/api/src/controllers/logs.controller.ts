@@ -93,3 +93,33 @@ export async function getLogs(req: AuthRequest, res: Response): Promise<void> {
     res.status(500).json({ success: false, error: 'Error obteniendo logs' });
   }
 }
+
+export async function getLogsForEntity(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id, type } = req.params as { id: string; type: string };
+    const { limit = '100', offset = '0' } = req.query;
+
+    // Use raw query to filter JSON context fields (Postgres JSON operator)
+    const logs = await prisma.$queryRaw`
+      SELECT id, level, message, stack, context, deviceInfo, platform, appVersion, "userId", "createdAt"
+      FROM app_logs
+      WHERE (context->>'entityType' = ${type} AND context->>'entityId' = ${id})
+         OR (context->>'entityId' = ${id})
+      ORDER BY "createdAt" DESC
+      LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}`;
+
+    // Total count for this entity
+    const countResult = await prisma.$queryRaw`
+      SELECT COUNT(*)::int AS total
+      FROM app_logs
+      WHERE (context->>'entityType' = ${type} AND context->>'entityId' = ${id})
+         OR (context->>'entityId' = ${id})`;
+
+    const total = Array.isArray(countResult) && countResult[0] && (countResult[0] as any).total ? (countResult[0] as any).total : 0;
+
+    res.json({ success: true, data: { logs, total, limit: parseInt(limit as string), offset: parseInt(offset as string) } });
+  } catch (error) {
+    console.error('Get entity logs error:', error);
+    res.status(500).json({ success: false, error: 'Error obteniendo historial' });
+  }
+}

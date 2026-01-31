@@ -52,11 +52,47 @@ function buildLeafletHtml(params: {
         } catch (e) {}
       }
 
+      // Forward console messages and errors to the React Native side so we
+      // can debug rendering issues inside the WebView.
+      (function hijackConsole() {
+        try {
+          const origLog = console.log.bind(console);
+          console.log = function () {
+            try { postMessageSafe('LOG:' + Array.from(arguments).map(String).join(' ')); } catch (e) {}
+            origLog.apply(null, arguments);
+          };
+          const origErr = console.error.bind(console);
+          console.error = function () {
+            try { postMessageSafe('ERROR:' + Array.from(arguments).map(String).join(' ')); } catch (e) {}
+            origErr.apply(null, arguments);
+          };
+          window.onerror = function (msg, url, line, col, err) {
+            try { postMessageSafe('ONERROR:' + msg + ' at ' + url + ':' + line + ':' + col); } catch (e) {}
+          };
+        } catch (e) {}
+      })();
+
       const map = L.map('map', { zoomControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
+      // CARTO Voyager: light, familiar (Google-ish) styling without an API key.
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20,
+        subdomains: 'abcd',
         attribution: '',
       }).addTo(map);
+
+      // Ensure marker icons load correctly inside the mobile WebView by
+      // explicitly setting the default icon URLs (Leaflet's CSS-relative
+      // paths often fail in WebView environments).
+      const defaultIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      });
+      L.Marker.prototype.options.icon = defaultIcon;
 
       const markersById = {};
 
@@ -109,7 +145,7 @@ function buildLeafletHtml(params: {
         } else if (points.length > 1) {
           map.fitBounds(points, { padding: [24, 24] });
         } else {
-          map.setView([0, 0], 2);
+          map.setView([9.0, -79.5], 12); // Panama City
         }
       }
 
@@ -127,6 +163,7 @@ function buildLeafletHtml(params: {
       window.setCouriers = setCouriers;
       window.centerOnCourier = centerOnCourier;
       setCouriers(initialCouriers);
+      try { postMessageSafe('MAP_HTML_LOADED'); } catch (e) {}
     </script>
   </body>
 </html>`;
@@ -136,6 +173,7 @@ export default function DispatcherMapScreen() {
   const [loading, setLoading] = useState(true);
   const [itemsById, setItemsById] = useState<Record<string, any>>({});
   const [liveConnected, setLiveConnected] = useState(false);
+  const [lastWebMsg, setLastWebMsg] = useState<string | null>(null);
 
   const webViewRef = useRef<WebView | null>(null);
 
@@ -299,9 +337,21 @@ export default function DispatcherMapScreen() {
           source={{ html: initialHtml }}
           javaScriptEnabled
           domStorageEnabled
+          onMessage={(e) => {
+            const msg = String(e.nativeEvent.data || '');
+            try { setLastWebMsg(msg); } catch (err) {}
+            try {
+              if (msg && msg.indexOf('MAP_HTML_LOADED') === 0) {
+                // WebView HTML signalled it's ready — inject current couriers.
+                const js = `window.setCouriers && window.setCouriers(${safeJson(couriersWithLocation)}); true;`;
+                webViewRef.current?.injectJavaScript(js);
+              }
+            } catch (err) {}
+          }}
           style={styles.map}
         />
       </View>
+      {lastWebMsg ? <Text style={styles.debug}>WebView: {lastWebMsg}</Text> : null}
 
       <FlatList
         data={items}
