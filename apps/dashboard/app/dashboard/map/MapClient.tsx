@@ -292,7 +292,7 @@ export default function MapClient() {
                     <div className="text-xs text-gray-600 space-y-0.5">
                       {c.activeDeliveries != null && <div>Activas: {c.activeDeliveries}</div>}
                       <div>
-                        {c.location.lat.toFixed(5)}, {c.location.lng.toFixed(5)}
+                        {Number(c.location.lat).toFixed(5)}, {Number(c.location.lng).toFixed(5)}
                       </div>
                       {c.location.recordedAt && <div>{new Date(c.location.recordedAt).toLocaleString()}</div>}
                       {c.location.batteryLevel != null && <div>Batería: {c.location.batteryLevel}%</div>}

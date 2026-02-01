@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listGasReports, getGasReport, createGasReport, deleteGasReport } from '../controllers/gas.controller.js';
+import { listGasReports, getGasReport, createGasReport, updateGasReport, deleteGasReport } from '../controllers/gas.controller.js';
 import { authenticateToken, requireAdminOrDispatcher } from '../middleware/auth.js';
 
 
@@ -11,6 +11,7 @@ router.use(requireAdminOrDispatcher);
 router.get('/', listGasReports);
 router.get('/:id', getGasReport);
 router.post('/', createGasReport);
+router.put('/:id', updateGasReport);
 router.delete('/:id', deleteGasReport);
 
 export default router;

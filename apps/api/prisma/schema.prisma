@@ -7,6 +7,302 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                       String                   @id @default(uuid())
+  email                    String?                  @unique
+  username                 String?                  @unique
+  pin                      String?
+  passwordHash             String?
+  fullName                 String
+  phone                    String?
+  role                     Role                     @default(COURIER)
+  isActive                 Boolean                  @default(true)
+  fcmToken                 String?
+  firstName                String?
+  middleName               String?
+  lastName                 String?
+  secondLastName           String?
+  gender                   String?
+  birthDate                DateTime?
+  personalPhone            String?
+  basePhone                String?
+  emergencyPhone           String?
+  licensePlate             String?
+  insurancePolicy          String?
+  insurerPhone             String?
+  insurerName              String?
+  nextWeightReview         DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  reportedAttendance       AttendanceRecord[]       @relation("Attendance_reporter")
+  attendanceRecords        AttendanceRecord[]       @relation("Attendance_user")
+  locations                CourierLocation[]
+  deliveries               Delivery[]
+  routePoints              DeliveryRoutePoint[]
+  reportedFleetMaintenance FleetMaintenanceReport[] @relation("FleetMaintenance_reporter")
+  gasReports               GasReport[]              @relation("GasReport_reporter")
+  tireInspections          TireSemaphore[]          @relation("TireSemaphore_inspector")
+  assignedVehicles         Vehicle[]                @relation("Vehicle_driver")
+
+  @@map("users")
+}
+
+model Customer {
+  id         String     @id @default(uuid())
+  name       String
+  phone      String
+  email      String?
+  cedula     String?    @unique
+  address    String
+  latitude   Decimal?   @db.Decimal(10, 8)
+  longitude  Decimal?   @db.Decimal(11, 8)
+  notes      String?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  deliveries Delivery[]
+
+  @@map("customers")
+}
+
+model Delivery {
+  id                  String               @id @default(uuid())
+  trackingCode        String               @unique @default(cuid())
+  publicTrackingToken String?              @unique @default(cuid())
+  customerId          String
+  courierId           String?
+  status              DeliveryStatus       @default(PENDING)
+  priority            Priority             @default(NORMAL)
+  description         String?
+  packageDetails      String?
+  scheduledDate       DateTime?
+  photoUrl            String?
+  signatureUrl        String?
+  videoUrl            String?
+  deliveryLat         Decimal?             @db.Decimal(10, 8)
+  deliveryLng         Decimal?             @db.Decimal(11, 8)
+  deliveredAt         DateTime?
+  deliveryNotes       String?
+  rating              Int?
+  localId             String?
+  syncedAt            DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  courier             User?                @relation(fields: [courierId], references: [id])
+  customer            Customer             @relation(fields: [customerId], references: [id])
+  photos              DeliveryPhoto[]
+  routePoints         DeliveryRoutePoint[]
+
+  @@index([courierId, status])
+  @@index([scheduledDate])
+  @@index([trackingCode])
+  @@index([publicTrackingToken])
+  @@map("deliveries")
+}
+
+model DeliveryPhoto {
+  id         String   @id @default(uuid())
+  deliveryId String
+  url        String
+  publicId   String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  createdAt  DateTime @default(now())
+  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+
+  @@index([deliveryId])
+  @@map("delivery_photos")
+}
+
+model DeliveryRoutePoint {
+  id           String   @id @default(uuid())
+  deliveryId   String
+  courierId    String
+  latitude     Decimal  @db.Decimal(10, 8)
+  longitude    Decimal  @db.Decimal(11, 8)
+  accuracy     Decimal? @db.Decimal(5, 2)
+  speed        Decimal? @db.Decimal(5, 2)
+  batteryLevel Int?
+  recordedAt   DateTime @default(now())
+  courier      User     @relation(fields: [courierId], references: [id])
+  delivery     Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId, recordedAt])
+  @@index([courierId, recordedAt(sort: Desc)])
+  @@map("delivery_route_points")
+}
+
+model CourierLocation {
+  id           String   @id @default(uuid())
+  courierId    String
+  latitude     Decimal  @db.Decimal(10, 8)
+  longitude    Decimal  @db.Decimal(11, 8)
+  accuracy     Decimal? @db.Decimal(5, 2)
+  speed        Decimal? @db.Decimal(5, 2)
+  batteryLevel Int?
+  recordedAt   DateTime @default(now())
+  courier      User     @relation(fields: [courierId], references: [id])
+
+  @@index([courierId, recordedAt(sort: Desc)])
+  @@map("courier_locations")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AppLog {
+  id         String   @id @default(uuid())
+  level      LogLevel @default(ERROR)
+  message    String
+  stack      String?
+  context    Json?
+  userId     String?
+  deviceInfo Json?
+  platform   String?
+  appVersion String?
+  createdAt  DateTime @default(now())
+
+  @@index([level])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@map("app_logs")
+}
+
+model Vehicle {
+  id                     String                   @id @default(uuid())
+  licensePlate           String                   @unique
+  make                   String?
+  model                  String?
+  year                   Int?
+  vin                    String?                  @unique
+  color                  String?
+  active                 Boolean                  @default(true)
+  driverId               String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  maintenanceReports     FleetMaintenanceReport[]
+  gasReports             GasReport[]
+  preventiveMaintenances PreventiveMaintenance[]
+  repairs                Repair[]
+  tireChecks             TireSemaphore[]
+  driver                 User?                    @relation("Vehicle_driver", fields: [driverId], references: [id])
+
+  @@map("vehicles")
+}
+
+model GasReport {
+  id         String   @id @default(uuid())
+  vehicleId  String
+  reportedBy String?
+  date       DateTime @default(now())
+  liters     Decimal  @db.Decimal(10, 2)
+  cost       Decimal? @db.Decimal(12, 2)
+  odometer   Int?
+  fuelType   String?
+  receiptUrl String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  reporter   User?    @relation("GasReport_reporter", fields: [reportedBy], references: [id])
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, date])
+  @@map("gas_reports")
+}
+
+model AttendanceRecord {
+  id             String         @id @default(uuid())
+  userId         String
+  date           DateTime
+  type           AttendanceType
+  minutesLate    Int?
+  reason         String?
+  attachmentUrl  String?
+  attachmentName String?
+  reportedBy     String?
+  approvedBy     String?
+  status         String?
+  createdAt      DateTime       @default(now())
+  reporter       User?          @relation("Attendance_reporter", fields: [reportedBy], references: [id])
+  user           User           @relation("Attendance_user", fields: [userId], references: [id])
+
+  @@index([userId, date])
+  @@map("attendance_records")
+}
+
+model FleetMaintenanceReport {
+  id          String            @id @default(uuid())
+  vehicleId   String
+  reportedBy  String?
+  date        DateTime          @default(now())
+  description String
+  severity    String?
+  attachments Json?
+  status      MaintenanceStatus @default(OPEN)
+  createdAt   DateTime          @default(now())
+  reporter    User?             @relation("FleetMaintenance_reporter", fields: [reportedBy], references: [id])
+  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, status])
+  @@map("fleet_maintenance_reports")
+}
+
+model PreventiveMaintenance {
+  id          String    @id @default(uuid())
+  vehicleId   String
+  scheduledAt DateTime
+  performedAt DateTime?
+  type        String?
+  performedBy String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, scheduledAt])
+  @@map("preventive_maintenances")
+}
+
+model Repair {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  date        DateTime @default(now())
+  performedBy String?
+  description String
+  cost        Decimal? @db.Decimal(12, 2)
+  attachments Json?
+  createdAt   DateTime @default(now())
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, date])
+  @@map("repairs")
+}
+
+model TireSemaphore {
+  id          String        @id @default(uuid())
+  vehicleId   String
+  inspectorId String?
+  frontLeft   TireCondition @default(GOOD)
+  frontRight  TireCondition @default(GOOD)
+  rearLeft    TireCondition @default(GOOD)
+  rearRight   TireCondition @default(GOOD)
+  notes       String?
+  recordedAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+  inspector   User?         @relation("TireSemaphore_inspector", fields: [inspectorId], references: [id])
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id])
+
+  @@index([vehicleId, recordedAt])
+  @@map("tire_semaphore")
+}
+
 enum Role {
   ADMIN
   DISPATCHER
@@ -29,171 +325,6 @@ enum Priority {
   URGENT
 }
 
-model User {
-  id           String    @id @default(uuid())
-  email        String?   @unique
-  username     String?   @unique
-  pin          String?
-  passwordHash String?
-  fullName     String
-  phone        String?
-  role         Role      @default(COURIER)
-  isActive     Boolean   @default(true)
-  fcmToken     String?
-
-  // Additional courier/helper fields
-  firstName       String?
-  middleName      String?
-  lastName        String?
-  secondLastName  String?
-  gender          String?  // M/F
-  birthDate       DateTime?
-  personalPhone   String?  // numero personal
-  basePhone       String?  // numero de base
-  emergencyPhone  String?  // numero de emergencia
-  licensePlate    String?  // placa
-  insurancePolicy String?  // poliza de seguro
-  insurerPhone    String?  // numero de la aseguradora
-  insurerName     String?  // nombre de la aseguradora
-  nextWeightReview DateTime? // proxima revision de peso y tonelada
-
-  deliveries Delivery[]
-  locations  CourierLocation[]
-  routePoints DeliveryRoutePoint[]
-  assignedVehicles Vehicle[] @relation("Vehicle_driver")
-  gasReports GasReport[] @relation("GasReport_reporter")
-  attendanceRecords AttendanceRecord[] @relation("Attendance_user")
-  reportedAttendance AttendanceRecord[] @relation("Attendance_reporter")
-  reportedFleetMaintenance FleetMaintenanceReport[] @relation("FleetMaintenance_reporter")
-  tireInspections TireSemaphore[] @relation("TireSemaphore_inspector")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("users")
-}
-
-model Customer {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String
-  email     String?
-  cedula    String?  @unique // Panama identification number
-  address   String
-  latitude  Decimal? @db.Decimal(10, 8)
-  longitude Decimal? @db.Decimal(11, 8)
-  notes     String?
-  isActive  Boolean  @default(true)
-
-  deliveries Delivery[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("customers")
-}
-
-model Delivery {
-  id                  String         @id @default(uuid())
-  trackingCode        String         @unique @default(cuid())
-  publicTrackingToken String?        @unique @default(cuid()) // For public tracking URL
-  customerId          String
-  customer            Customer       @relation(fields: [customerId], references: [id])
-  courierId           String?
-  courier             User?          @relation(fields: [courierId], references: [id])
-  status              DeliveryStatus @default(PENDING)
-  priority            Priority       @default(NORMAL)
-
-  description    String?
-  packageDetails String?
-  scheduledDate  DateTime?
-
-  photoUrl      String?
-  signatureUrl  String?
-  videoUrl      String?
-  deliveryLat   Decimal? @db.Decimal(10, 8)
-  deliveryLng   Decimal? @db.Decimal(11, 8)
-  deliveredAt   DateTime?
-  deliveryNotes String?
-  rating        Int?
-
-  localId  String?
-  syncedAt DateTime?
-
-  photos      DeliveryPhoto[]
-  routePoints DeliveryRoutePoint[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([courierId, status])
-  @@index([scheduledDate])
-  @@index([trackingCode])
-  @@index([publicTrackingToken])
-  @@map("deliveries")
-}
-
-model DeliveryPhoto {
-  id         String   @id @default(uuid())
-  deliveryId String
-  delivery   Delivery @relation(fields: [deliveryId], references: [id])
-  url        String
-  publicId   String?
-  width      Int?
-  height     Int?
-  bytes      Int?
-
-  createdAt DateTime @default(now())
-
-  @@index([deliveryId])
-  @@map("delivery_photos")
-}
-
-model DeliveryRoutePoint {
-  id           String   @id @default(uuid())
-  deliveryId   String
-  delivery     Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
-  courierId    String
-  courier      User     @relation(fields: [courierId], references: [id], onDelete: Restrict)
-  latitude     Decimal  @db.Decimal(10, 8)
-  longitude    Decimal  @db.Decimal(11, 8)
-  accuracy     Decimal? @db.Decimal(5, 2)
-  speed        Decimal? @db.Decimal(5, 2)
-  batteryLevel Int?
-  recordedAt   DateTime @default(now())
-
-  @@index([deliveryId, recordedAt(sort: Asc)])
-  @@index([courierId, recordedAt(sort: Desc)])
-  @@map("delivery_route_points")
-}
-
-model CourierLocation {
-  id           String   @id @default(uuid())
-  courierId    String
-  courier      User     @relation(fields: [courierId], references: [id])
-  latitude     Decimal  @db.Decimal(10, 8)
-  longitude    Decimal  @db.Decimal(11, 8)
-  accuracy     Decimal? @db.Decimal(5, 2)
-  speed        Decimal? @db.Decimal(5, 2)
-  batteryLevel Int?
-
-  recordedAt DateTime @default(now())
-
-  @@index([courierId, recordedAt(sort: Desc)])
-  @@map("courier_locations")
-}
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@map("refresh_tokens")
-}
-
 enum LogLevel {
   DEBUG
   INFO
@@ -201,74 +332,6 @@ enum LogLevel {
   ERROR
 }
 
-model AppLog {
-  id        String   @id @default(uuid())
-  level     LogLevel @default(ERROR)
-  message   String
-  stack     String?
-  context   Json?
-  userId    String?
-  deviceInfo Json?
-  platform  String?
-  appVersion String?
-
-  createdAt DateTime @default(now())
-
-  @@index([level])
-  @@index([userId])
-  @@index([createdAt(sort: Desc)])
-  @@map("app_logs")
-}
-
-// Vehículos de la flota
-model Vehicle {
-  id           String   @id @default(uuid())
-  licensePlate String   @unique
-  make         String?
-  model        String?
-  year         Int?
-  vin          String?  @unique
-  color        String?
-  active       Boolean  @default(true)
-
-  // Relación opcional a un conductor/usuario asignado
-  driverId String?
-  driver   User?     @relation("Vehicle_driver", fields: [driverId], references: [id])
-
-  gasReports      GasReport[]
-  maintenanceReports FleetMaintenanceReport[]
-  preventiveMaintenances PreventiveMaintenance[]
-  repairs         Repair[]
-  tireChecks      TireSemaphore[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("vehicles")
-}
-
-// Reportes de gasolina
-model GasReport {
-  id         String   @id @default(uuid())
-  vehicleId  String
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  reportedBy String?  // user id
-  reporter   User?    @relation("GasReport_reporter", fields: [reportedBy], references: [id])
-  date       DateTime @default(now())
-  liters     Decimal  @db.Decimal(10, 2)
-  cost       Decimal? @db.Decimal(12, 2)
-  odometer   Int?
-  fuelType   String?
-  receiptUrl String?
-  notes      String?
-
-  createdAt DateTime @default(now())
-
-  @@index([vehicleId, date])
-  @@map("gas_reports")
-}
-
-// Registro de asistencia (asistencias, ausencias, incapacidades, tardanzas, vacaciones)
 enum AttendanceType {
   ATTENDANCE
   ABSENCE
@@ -277,108 +340,14 @@ enum AttendanceType {
   TARDY
 }
 
-model AttendanceRecord {
-  id           String         @id @default(uuid())
-  userId       String
-  user         User           @relation("Attendance_user", fields: [userId], references: [id])
-  date         DateTime
-  type         AttendanceType
-  minutesLate  Int?           // Solo para TARDY
-  reason       String?
-  attachmentUrl String?       // URL del archivo adjunto (justificante, etc.)
-  attachmentName String?      // Nombre original del archivo
-  reportedBy   String?
-  reporter     User?          @relation("Attendance_reporter", fields: [reportedBy], references: [id])
-  approvedBy   String?
-  status       String?        // PENDING/APPROVED/REJECTED
-
-  createdAt DateTime @default(now())
-
-  @@index([userId, date])
-  @@map("attendance_records")
-}
-
-// Reportes de mantenimiento de flota (incidentes, observaciones)
 enum MaintenanceStatus {
   OPEN
   IN_PROGRESS
   CLOSED
 }
 
-model FleetMaintenanceReport {
-  id         String   @id @default(uuid())
-  vehicleId  String
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  reportedBy String?
-  reporter   User?    @relation("FleetMaintenance_reporter", fields: [reportedBy], references: [id])
-  date       DateTime @default(now())
-  description String
-  severity   String?  // LOW/MEDIUM/HIGH
-  attachments Json?
-  status     MaintenanceStatus @default(OPEN)
-
-  createdAt DateTime @default(now())
-
-  @@index([vehicleId, status])
-  @@map("fleet_maintenance_reports")
-}
-
-// Mantenimiento preventivo programado y realizado
-model PreventiveMaintenance {
-  id           String   @id @default(uuid())
-  vehicleId    String
-  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
-  scheduledAt  DateTime
-  performedAt  DateTime?
-  type         String?
-  performedBy  String?  // user id
-  notes        String?
-
-  createdAt DateTime @default(now())
-
-  @@index([vehicleId, scheduledAt])
-  @@map("preventive_maintenances")
-}
-
-// Reparaciones realizadas
-model Repair {
-  id         String   @id @default(uuid())
-  vehicleId  String
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
-  date       DateTime @default(now())
-  performedBy String?
-  description String
-  cost       Decimal? @db.Decimal(12,2)
-  attachments Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([vehicleId, date])
-  @@map("repairs")
-}
-
-// Semáforo de llantas
 enum TireCondition {
   GOOD
   WARNING
   REPLACE
-}
-
-model TireSemaphore {
-  id           String        @id @default(uuid())
-  vehicleId    String
-  vehicle      Vehicle       @relation(fields: [vehicleId], references: [id])
-  inspectorId  String?
-  inspector    User?         @relation("TireSemaphore_inspector", fields: [inspectorId], references: [id])
-  frontLeft    TireCondition @default(GOOD)
-  frontRight   TireCondition @default(GOOD)
-  rearLeft     TireCondition @default(GOOD)
-  rearRight    TireCondition @default(GOOD)
-  notes        String?
-  recordedAt   DateTime      @default(now())
-
-  createdAt DateTime @default(now())
-
-  @@index([vehicleId, recordedAt])
-  @@map("tire_semaphore")
 }

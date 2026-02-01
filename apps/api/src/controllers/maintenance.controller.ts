@@ -57,4 +57,15 @@ export async function updateFleetMaintenance(req: Request, res: Response) {
   }
 }
 
+export async function deleteFleetMaintenance(req: Request, res: Response) {
+  try {
+    const id = String(req.params.id);
+    await prisma.fleetMaintenanceReport.delete({ where: { id } });
+    res.json({ success: true, message: 'Eliminado exitosamente' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
 export default {};

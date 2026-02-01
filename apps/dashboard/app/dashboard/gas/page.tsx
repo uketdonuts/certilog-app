@@ -156,9 +156,9 @@ export default function GasPage() {
     return v ? `${v.licensePlate} - ${v.make || ''} ${v.model || ''}`.trim() : report.vehicleId;
   }
 
-  function formatCurrency(amount: number | null) {
+  function formatCurrency(amount: number | string | null) {
     if (amount === null || amount === undefined) return '-';
-    return `$${amount.toFixed(2)}`;
+    return `$${Number(amount).toFixed(2)}`;
   }
 
   const filteredReports = search

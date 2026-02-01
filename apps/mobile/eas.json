@@ -13,8 +13,8 @@
       },
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms",
-        "EXPO_PUBLIC_SOCKET_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms"
+        "EXPO_PUBLIC_API_URL": "http://64.23.184.245:2120",
+        "EXPO_PUBLIC_SOCKET_URL": "http://64.23.184.245:2120"
       }
     },
     "local": {
@@ -32,8 +32,17 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms",
-        "EXPO_PUBLIC_SOCKET_URL": "https://jtfrcpdb-2120.use2.devtunnels.ms"
+        "EXPO_PUBLIC_API_URL": "https://certilog.com.pa/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.com.pa"
+      }
+    },
+    "production-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://certilog.com.pa/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.com.pa"
       }
     }
   },
