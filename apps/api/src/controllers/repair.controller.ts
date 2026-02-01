@@ -62,7 +62,7 @@ export async function createRepair(req: Request, res: Response) {
 
 export async function updateRepair(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { vehicleId, description, cost, performedAt } = req.body;
 
     const item = await prisma.repair.update({
@@ -85,7 +85,7 @@ export async function updateRepair(req: Request, res: Response) {
 
 export async function deleteRepair(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     await prisma.repair.delete({ where: { id } });
     res.json({ success: true, message: 'Reparación eliminada' });
   } catch (e) {

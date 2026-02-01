@@ -13,8 +13,8 @@
       },
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://64.23.184.245:2120",
-        "EXPO_PUBLIC_SOCKET_URL": "http://64.23.184.245:2120"
+        "EXPO_PUBLIC_API_URL": "https://certilog.starkmind.dev",
+        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.starkmind.dev"
       }
     },
     "local": {
@@ -32,8 +32,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://certilog.com.pa/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.com.pa"
+        "EXPO_PUBLIC_API_URL": "https://certilog.starkmind.dev",
+        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.starkmind.dev"
       }
     },
     "production-apk": {
@@ -41,8 +41,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://certilog.com.pa/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.com.pa"
+        "EXPO_PUBLIC_API_URL": "https://certilog.starkmind.dev",
+        "EXPO_PUBLIC_SOCKET_URL": "https://certilog.starkmind.dev"
       }
     }
   },

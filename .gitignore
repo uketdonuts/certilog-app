@@ -55,3 +55,6 @@ prisma/*.db-journal
 tmp
 temp
 *.tmp
+
+# Cloudflare Tunnel credentials
+.cloudflared/*.json

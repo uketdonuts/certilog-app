@@ -1,0 +1,14 @@
+tunnel: 1cda938f-882c-4c94-9613-ac2df8d88ac4
+credentials-file: /root/.cloudflared/1cda938f-882c-4c94-9613-ac2df8d88ac4.json
+
+ingress:
+  # API backend - api.certilog.starkmind.dev
+  - hostname: api.certilog.starkmind.dev
+    service: http://localhost:3001
+  
+  # Dashboard frontend - certilog.starkmind.dev
+  - hostname: certilog.starkmind.dev
+    service: http://localhost:3000
+  
+  # Default fallback
+  - service: http_status:404
