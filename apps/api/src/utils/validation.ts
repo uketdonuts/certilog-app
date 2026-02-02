@@ -123,6 +123,15 @@ export const completeDeliverySchema = z.object({
   rating: z.number().int().min(1).max(10),
 });
 
+export const rescheduleDeliverySchema = z.object({
+  scheduledDate: z.string().datetime(),
+  reason: z.string().max(500).optional(),
+});
+
+export const cancelDeliverySchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+
 // Location schemas
 export const locationBatchSchema = z.object({
   locations: z.array(z.object({

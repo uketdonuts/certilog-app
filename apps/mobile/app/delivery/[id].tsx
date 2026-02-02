@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { getDeliveryById, Delivery, startDelivery } from '@/lib/api/deliveries';
+import { getDeliveryById, Delivery, startDelivery, rescheduleDelivery } from '@/lib/api/deliveries';
 import { openWhatsApp, callPhone } from '@/lib/services/whatsapp';
 import { openMapsNavigation } from '@/lib/services/location';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -27,6 +27,7 @@ const STATUS_COLORS: Record<string, string> = {
   IN_TRANSIT: '#8B5CF6',
   DELIVERED: '#22C55E',
   FAILED: '#EF4444',
+  CANCELLED: '#6B7280',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -35,6 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
   IN_TRANSIT: 'En tránsito',
   DELIVERED: 'Entregada',
   FAILED: 'Fallida',
+  CANCELLED: 'Cancelada',
 };
 
 export default function DeliveryDetailScreen() {
@@ -84,6 +86,28 @@ export default function DeliveryDetailScreen() {
 
   const handleCompleteDelivery = () => {
     router.push(`/delivery/complete/${id}`);
+  };
+
+  const handleReschedule = () => {
+    if (!delivery) return;
+    
+    Alert.alert(
+      'Reagendar Entrega',
+      `¿Deseas reagendar la entrega para ${delivery.customer.name}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Reagendar',
+          onPress: () => {
+            // Navigate to reschedule screen or show date picker
+            router.push({
+              pathname: '/delivery/reschedule/[id]',
+              params: { id: delivery.id }
+            } as any);
+          }
+        }
+      ]
+    );
   };
 
   const handleNavigate = () => {
@@ -185,6 +209,8 @@ export default function DeliveryDetailScreen() {
   const canStart = delivery.status === 'ASSIGNED';
   const canComplete = delivery.status === 'IN_TRANSIT';
   const isCompleted = delivery.status === 'DELIVERED';
+  const isCancelled = delivery.status === 'CANCELLED';
+  const canReschedule = ['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status);
   const isCourier = user?.role === 'COURIER';
 
   return (
@@ -329,11 +355,52 @@ export default function DeliveryDetailScreen() {
           </View>
         )}
 
+        {/* Reschedule Info */}
+        {delivery.rescheduledCount > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Información de Reagendamiento</Text>
+            <View style={[styles.proofCard, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.deliveredAt, { color: '#92400E' }]}>
+                Reagendada {delivery.rescheduledCount} vez/veces
+              </Text>
+              {delivery.rescheduledFrom && (
+                <Text style={[styles.notes, { color: '#92400E' }]}>
+                  Fecha anterior: {new Date(delivery.rescheduledFrom).toLocaleString()}
+                </Text>
+              )}
+              {delivery.rescheduleReason && (
+                <Text style={[styles.notes, { color: '#92400E' }]}>
+                  Motivo: {delivery.rescheduleReason}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Cancellation Info */}
+        {isCancelled && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Información de Cancelación</Text>
+            <View style={[styles.proofCard, { backgroundColor: '#F3F4F6' }]}>
+              {delivery.cancelledAt && (
+                <Text style={[styles.deliveredAt, { color: '#374151' }]}>
+                  Cancelada: {new Date(delivery.cancelledAt).toLocaleString()}
+                </Text>
+              )}
+              {delivery.cancellationReason && (
+                <Text style={[styles.notes, { color: '#374151' }]}>
+                  Motivo: {delivery.cancellationReason}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
         <View style={styles.bottomPadding} />
       </ScrollView>
 
       {/* Action Buttons */}
-      {!isCompleted && isCourier && (
+      {!isCompleted && !isCancelled && isCourier && (
         <View style={styles.actionContainer}>
           {canStart && (
             <TouchableOpacity
@@ -359,6 +426,16 @@ export default function DeliveryDetailScreen() {
             >
               <Ionicons name="checkmark-circle" size={24} color="#fff" />
               <Text style={styles.actionButtonText}>Completar Entrega</Text>
+            </TouchableOpacity>
+          )}
+
+          {canReschedule && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.secondaryButton]}
+              onPress={handleReschedule}
+            >
+              <Ionicons name="calendar" size={24} color="#fff" />
+              <Text style={styles.actionButtonText}>Reagendar</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -547,6 +624,10 @@ const styles = StyleSheet.create({
   },
   completeButton: {
     backgroundColor: '#22C55E',
+  },
+  secondaryButton: {
+    backgroundColor: '#F59E0B',
+    marginTop: 8,
   },
   actionButtonText: {
     color: '#fff',

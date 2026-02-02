@@ -17,6 +17,8 @@ import {
   StarIcon,
   VideoCameraIcon,
   LinkIcon,
+  CalendarIcon,
+  NoSymbolIcon,
 } from '@heroicons/react/24/outline';
 import {
   getDeliveries,
@@ -29,6 +31,8 @@ import {
   importDeliveriesFromExcel,
   downloadImportTemplate,
   exportDeliveriesToExcel,
+  rescheduleDelivery,
+  cancelDelivery,
 } from '@/lib/api';
 import { useToast } from '@/components/ToastProvider';
 import Pagination from '@/components/Pagination';
@@ -49,6 +53,7 @@ interface Delivery {
   status: string;
   priority: string;
   description: string | null;
+  scheduledDate?: string | null;
   customer: {
     id: string;
     name: string;
@@ -72,6 +77,10 @@ interface Delivery {
   deliveryNotes?: string;
   rating?: number;
   photos?: DeliveryPhoto[];
+  rescheduledCount?: number;
+  rescheduleReason?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
 }
 
 interface Courier {
@@ -103,6 +112,8 @@ export default function DeliveriesPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState<Delivery | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState<Delivery | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState<Delivery | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState<Delivery | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [routePoints, setRoutePoints] = useState<Array<{ lat: number; lng: number; recordedAt: string }>>([]);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -239,6 +250,60 @@ export default function DeliveriesPage() {
     }
   }
 
+  async function handleReschedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!showRescheduleModal) return;
+    
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const scheduledDate = formData.get('scheduledDate') as string;
+    const reason = formData.get('reason') as string;
+    
+    if (!scheduledDate) {
+      toast.push({ type: 'error', message: 'Debes seleccionar una fecha' });
+      return;
+    }
+    
+    try {
+      await rescheduleDelivery(showRescheduleModal.id, { 
+        scheduledDate: new Date(scheduledDate).toISOString(),
+        reason: reason || undefined 
+      });
+      setShowRescheduleModal(null);
+      fetchData();
+      toast.push({ type: 'success', message: 'Entrega reagendada exitosamente' });
+    } catch (error) {
+      console.error('Error rescheduling delivery:', error);
+      const msg = (error as any)?.response?.data?.error;
+      toast.push({ type: 'error', message: msg || 'Error al reagendar la entrega' });
+    }
+  }
+
+  async function handleCancel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!showCancelModal) return;
+    
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const reason = formData.get('reason') as string;
+    
+    if (!reason || reason.trim().length < 3) {
+      toast.push({ type: 'error', message: 'Debes proporcionar un motivo de cancelación (mínimo 3 caracteres)' });
+      return;
+    }
+    
+    try {
+      await cancelDelivery(showCancelModal.id, reason);
+      setShowCancelModal(null);
+      fetchData();
+      toast.push({ type: 'success', message: 'Entrega cancelada exitosamente' });
+    } catch (error) {
+      console.error('Error cancelling delivery:', error);
+      const msg = (error as any)?.response?.data?.error;
+      toast.push({ type: 'error', message: msg || 'Error al cancelar la entrega' });
+    }
+  }
+
   async function handleViewDetails(delivery: Delivery) {
     setLoadingDetails(true);
     try {
@@ -299,6 +364,7 @@ export default function DeliveriesPage() {
     IN_TRANSIT: 'bg-purple-100 text-purple-800',
     DELIVERED: 'bg-green-100 text-green-800',
     FAILED: 'bg-red-100 text-red-800',
+    CANCELLED: 'bg-gray-100 text-gray-800',
   };
 
   const statusLabels: Record<string, string> = {
@@ -307,6 +373,7 @@ export default function DeliveriesPage() {
     IN_TRANSIT: 'En tránsito',
     DELIVERED: 'Entregada',
     FAILED: 'Fallida',
+    CANCELLED: 'Cancelada',
   };
 
   const priorityColors: Record<string, string> = {
@@ -372,6 +439,7 @@ export default function DeliveriesPage() {
             <option value="IN_TRANSIT">En tránsito</option>
             <option value="DELIVERED">Entregadas</option>
             <option value="FAILED">Fallidas</option>
+            <option value="CANCELLED">Canceladas</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
@@ -497,6 +565,28 @@ export default function DeliveriesPage() {
                           className="text-primary-600 hover:text-primary-700 text-sm font-medium"
                         >
                           {delivery.courier ? 'Reasignar' : 'Asignar'}
+                        </button>
+                      )}
+                      {/* Reagendar - disponible para PENDING, ASSIGNED, IN_TRANSIT, FAILED */}
+                      {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
+                        <button
+                          onClick={() => setShowRescheduleModal(delivery)}
+                          className="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center gap-1"
+                          title="Reagendar entrega"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                          Reagendar
+                        </button>
+                      )}
+                      {/* Cancelar - disponible para PENDING, ASSIGNED, IN_TRANSIT, FAILED */}
+                      {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
+                        <button
+                          onClick={() => setShowCancelModal(delivery)}
+                          className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
+                          title="Cancelar entrega"
+                        >
+                          <NoSymbolIcon className="h-4 w-4" />
+                          Cancelar
                         </button>
                       )}
                     </div>
@@ -935,14 +1025,190 @@ export default function DeliveriesPage() {
                   </div>
                 )}
 
+                {/* Reschedule Info */}
+                {(showDetailsModal.rescheduledCount && showDetailsModal.rescheduledCount > 0) && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-orange-800 mb-2 flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      Información de Reagendamiento
+                    </h3>
+                    <p className="text-sm text-orange-700">
+                      Esta entrega ha sido reagendada <strong>{showDetailsModal.rescheduledCount}</strong> vez/veces
+                    </p>
+                    {showDetailsModal.rescheduledFrom && (
+                      <p className="text-sm text-orange-700 mt-1">
+                        Fecha anterior: {new Date(showDetailsModal.rescheduledFrom).toLocaleString('es-ES')}
+                      </p>
+                    )}
+                    {showDetailsModal.rescheduleReason && (
+                      <p className="text-sm text-orange-700 mt-1">
+                        Motivo: {showDetailsModal.rescheduleReason}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Cancellation Info */}
+                {showDetailsModal.status === 'CANCELLED' && (
+                  <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-gray-800 mb-2 flex items-center gap-2">
+                      <NoSymbolIcon className="h-4 w-4" />
+                      Información de Cancelación
+                    </h3>
+                    {showDetailsModal.cancelledAt && (
+                      <p className="text-sm text-gray-700">
+                        Cancelada el: {new Date(showDetailsModal.cancelledAt).toLocaleString('es-ES')}
+                      </p>
+                    )}
+                    {showDetailsModal.cancellationReason && (
+                      <p className="text-sm text-gray-700 mt-1">
+                        Motivo: {showDetailsModal.cancellationReason}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* No proof message for non-delivered */}
-                {showDetailsModal.status !== 'DELIVERED' && (
+                {showDetailsModal.status !== 'DELIVERED' && showDetailsModal.status !== 'CANCELLED' && (
                   <div className="text-center py-8 text-gray-500">
                     <PhotoIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p>Las fotos, firma y ubicación estarán disponibles cuando se complete la entrega.</p>
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div
+              className="fixed inset-0 bg-gray-900/50"
+              onClick={() => setShowRescheduleModal(null)}
+            />
+            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Reagendar Entrega
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Entrega <strong>{showRescheduleModal.trackingCode}</strong> para{' '}
+                <strong>{showRescheduleModal.customer.name}</strong>
+              </p>
+              {showRescheduleModal.rescheduledCount && showRescheduleModal.rescheduledCount > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    Esta entrega ya ha sido reagendada <strong>{showRescheduleModal.rescheduledCount}</strong> vez/veces
+                  </p>
+                  {showRescheduleModal.rescheduleReason && (
+                    <p className="text-sm text-yellow-700 mt-1">
+                      Último motivo: {showRescheduleModal.rescheduleReason}
+                    </p>
+                  )}
+                </div>
+              )}
+              <form onSubmit={handleReschedule} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nueva fecha de entrega *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="scheduledDate"
+                    required
+                    defaultValue={showRescheduleModal.scheduledDate 
+                      ? new Date(showRescheduleModal.scheduledDate).toISOString().slice(0, 16)
+                      : ''}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Motivo del reagendamiento (opcional)
+                  </label>
+                  <textarea
+                    name="reason"
+                    rows={3}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
+                    placeholder="Ej: Cliente no disponible, dirección incorrecta, etc."
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowRescheduleModal(null)}
+                    className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                  >
+                    Reagendar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div
+              className="fixed inset-0 bg-gray-900/50"
+              onClick={() => setShowCancelModal(null)}
+            />
+            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Cancelar Entrega
+              </h2>
+              <p className="text-gray-600 mb-4">
+                ¿Estás seguro de que deseas cancelar la entrega{' '}
+                <strong>{showCancelModal.trackingCode}</strong> para{' '}
+                <strong>{showCancelModal.customer.name}</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800">
+                  <strong>Advertencia:</strong> Esta acción no se puede deshacer. 
+                  La entrega será marcada como cancelada y el mensajero será desasignado.
+                </p>
+              </div>
+              <form onSubmit={handleCancel} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Motivo de cancelación *
+                  </label>
+                  <textarea
+                    name="reason"
+                    rows={3}
+                    required
+                    minLength={3}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
+                    placeholder="Ej: Cliente solicitó cancelación, producto dañado, dirección inexistente, etc."
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCancelModal(null)}
+                    className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    Confirmar Cancelación
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

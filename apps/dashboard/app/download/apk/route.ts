@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { Readable } from 'stream';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 type VersionInfo = {
   version: string;
@@ -18,7 +18,7 @@ function noCacheHeaders(filename: string) {
     Pragma: 'no-cache',
     Expires: '0',
     'Surrogate-Control': 'no-store',
-  } as Record<string, string>;
+  };
 }
 
 function resolveApkPath(versionInfo: VersionInfo | null) {
@@ -33,7 +33,11 @@ function resolveApkPath(versionInfo: VersionInfo | null) {
     }
   }
 
-  // Fallback: find any APK in the downloads directory (should only be one after build)
+  // Fallback: find any APK in the downloads directory
+  if (!fs.existsSync(downloadsDir)) {
+    return null;
+  }
+  
   const files = fs.readdirSync(downloadsDir).filter(f => f.endsWith('.apk') && !f.includes('history'));
   if (files.length > 0) {
     const apkFile = files[0];
@@ -52,7 +56,7 @@ function readVersionInfo(): VersionInfo | null {
     const versionFile = path.join(process.cwd(), 'public', 'app-version.json');
     if (!fs.existsSync(versionFile)) return null;
     let raw = fs.readFileSync(versionFile, 'utf8');
-    // Remove BOM (Byte Order Mark) if present - common with Windows-generated files
+    // Remove BOM (Byte Order Mark) if present
     if (raw.charCodeAt(0) === 0xfeff) {
       raw = raw.slice(1);
     }
@@ -62,42 +66,52 @@ function readVersionInfo(): VersionInfo | null {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const versionInfo = readVersionInfo();
   const resolved = resolveApkPath(versionInfo);
+  
   if (!resolved) {
     return new Response('APK not available', { status: 404 });
   }
 
-  // Serve the file directly from filesystem - no redirects to avoid static cache issues
-  const stat = fs.statSync(resolved.filePath);
-  const nodeStream = fs.createReadStream(resolved.filePath);
-  const stream = Readable.toWeb(nodeStream) as unknown as ReadableStream;
-
-  return new Response(stream as any, {
-    status: 200,
-    headers: {
-      ...noCacheHeaders(resolved.downloadName),
-      'Content-Length': String(stat.size),
-      'Last-Modified': stat.mtime.toUTCString(),
-    },
-  });
+  try {
+    // Use Blob API (Node.js 20+) - more reliable than streams
+    const blob = await fs.openAsBlob(resolved.filePath);
+    
+    return new Response(blob, {
+      status: 200,
+      headers: {
+        ...noCacheHeaders(resolved.downloadName),
+        'Content-Length': String(blob.size),
+        'Last-Modified': fs.statSync(resolved.filePath).mtime.toUTCString(),
+      },
+    });
+  } catch (error) {
+    console.error('Error serving APK:', error);
+    return new Response('Error reading APK file', { status: 500 });
+  }
 }
 
-export async function HEAD() {
+export async function HEAD(request: Request) {
   const versionInfo = readVersionInfo();
   const resolved = resolveApkPath(versionInfo);
+  
   if (!resolved) {
     return new Response(null, { status: 404 });
   }
 
-  const stat = fs.statSync(resolved.filePath);
-  return new Response(null, {
-    status: 200,
-    headers: {
-      ...noCacheHeaders(resolved.downloadName),
-      'Content-Length': String(stat.size),
-      'Last-Modified': stat.mtime.toUTCString(),
-    },
-  });
+  try {
+    const stat = fs.statSync(resolved.filePath);
+    return new Response(null, {
+      status: 200,
+      headers: {
+        ...noCacheHeaders(resolved.downloadName),
+        'Content-Length': String(stat.size),
+        'Last-Modified': stat.mtime.toUTCString(),
+      },
+    });
+  } catch (error) {
+    console.error('Error stating APK:', error);
+    return new Response(null, { status: 500 });
+  }
 }

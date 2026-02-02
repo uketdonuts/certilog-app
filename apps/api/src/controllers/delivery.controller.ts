@@ -10,6 +10,8 @@ import {
   paginationSchema,
   deliveryFiltersSchema,
   syncSchema,
+  rescheduleDeliverySchema,
+  cancelDeliverySchema,
 } from '../utils/validation.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { DeliveryStatus, Role } from '@prisma/client';
@@ -743,7 +745,7 @@ export async function syncDeliveries(req: AuthRequest, res: Response): Promise<v
       results.locationsAdded = locations.length;
     }
 
-    // Return updated deliveries
+    // Return updated deliveries (exclude cancelled for couriers)
     const updatedDeliveries = await prisma.delivery.findMany({
       where: {
         courierId,
@@ -785,13 +787,14 @@ export async function getDeliveryStats(req: Request, res: Response): Promise<voi
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [total, pending, assigned, inTransit, delivered, failed, todayDelivered] = await Promise.all([
+    const [total, pending, assigned, inTransit, delivered, failed, cancelled, todayDelivered] = await Promise.all([
       prisma.delivery.count(),
       prisma.delivery.count({ where: { status: DeliveryStatus.PENDING } }),
       prisma.delivery.count({ where: { status: DeliveryStatus.ASSIGNED } }),
       prisma.delivery.count({ where: { status: DeliveryStatus.IN_TRANSIT } }),
       prisma.delivery.count({ where: { status: DeliveryStatus.DELIVERED } }),
       prisma.delivery.count({ where: { status: DeliveryStatus.FAILED } }),
+      prisma.delivery.count({ where: { status: DeliveryStatus.CANCELLED } }),
       prisma.delivery.count({
         where: {
           status: DeliveryStatus.DELIVERED,
@@ -809,6 +812,7 @@ export async function getDeliveryStats(req: Request, res: Response): Promise<voi
         inTransit,
         delivered,
         failed,
+        cancelled,
         todayDelivered,
       },
     });
@@ -887,6 +891,10 @@ export async function exportDeliveries(req: AuthRequest, res: Response): Promise
       'Fecha Creación': d.createdAt.toISOString(),
       'Fecha Programada': d.scheduledDate?.toISOString() || '',
       'Fecha Entregada': d.deliveredAt?.toISOString() || '',
+      'Reagendada': d.rescheduledCount > 0 ? `Sí (${d.rescheduledCount}x)` : 'No',
+      'Motivo Reagendamiento': d.rescheduleReason || '',
+      'Fecha Cancelación': d.cancelledAt?.toISOString() || '',
+      'Motivo Cancelación': d.cancellationReason || '',
       'Notas': d.deliveryNotes || '',
     }));
 
@@ -908,6 +916,10 @@ export async function exportDeliveries(req: AuthRequest, res: Response): Promise
       { wch: 20 }, // Fecha Creación
       { wch: 20 }, // Fecha Programada
       { wch: 20 }, // Fecha Entregada
+      { wch: 15 }, // Reagendada
+      { wch: 30 }, // Motivo Reagendamiento
+      { wch: 20 }, // Fecha Cancelación
+      { wch: 30 }, // Motivo Cancelación
       { wch: 30 }, // Notas
     ];
 
@@ -919,5 +931,192 @@ export async function exportDeliveries(req: AuthRequest, res: Response): Promise
   } catch (error) {
     console.error('Export deliveries error:', error);
     res.status(500).json({ success: false, error: 'Error al exportar entregas' });
+  }
+}
+
+export async function rescheduleDelivery(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+
+    const validation = rescheduleDeliverySchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ success: false, error: validation.error.errors[0].message });
+      return;
+    }
+
+    const { scheduledDate, reason } = validation.data;
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        courier: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            fcmToken: true,
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    // Cannot reschedule delivered or cancelled deliveries
+    if (delivery.status === DeliveryStatus.DELIVERED) {
+      res.status(400).json({ success: false, error: 'No se puede reagendar una entrega ya entregada' });
+      return;
+    }
+
+    if (delivery.status === DeliveryStatus.CANCELLED) {
+      res.status(400).json({ success: false, error: 'No se puede reagendar una entrega cancelada' });
+      return;
+    }
+
+    // Couriers can only reschedule their own deliveries
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
+      res.status(403).json({ success: false, error: 'No tienes permiso para reagendar esta entrega' });
+      return;
+    }
+
+    const newScheduledDate = new Date(scheduledDate);
+    const previousDate = delivery.scheduledDate;
+
+    const updatedDelivery = await prisma.delivery.update({
+      where: { id },
+      data: {
+        scheduledDate: newScheduledDate,
+        rescheduledFrom: previousDate,
+        rescheduledCount: { increment: 1 },
+        rescheduleReason: reason || null,
+        // If was in transit, reset to assigned
+        status: delivery.status === DeliveryStatus.IN_TRANSIT ? DeliveryStatus.ASSIGNED : delivery.status,
+      },
+      include: {
+        customer: true,
+        courier: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            fcmToken: true,
+          },
+        },
+        photos: true,
+      },
+    });
+
+    // Send push notification if assigned to a courier
+    if (updatedDelivery.courier?.fcmToken) {
+      const formattedDate = newScheduledDate.toLocaleDateString('es-ES', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+      await sendPushNotification(
+        updatedDelivery.courier.fcmToken,
+        '📅 Entrega reagendada',
+        `Entrega para ${updatedDelivery.customer.name} reagendada para ${formattedDate}`,
+        { deliveryId: updatedDelivery.id, type: 'DELIVERY_RESCHEDULED' }
+      );
+    }
+
+    res.json({ success: true, data: normalizeDeliveryLatLng(updatedDelivery) });
+  } catch (error) {
+    console.error('Reschedule delivery error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function cancelDelivery(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+
+    const validation = cancelDeliverySchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ success: false, error: validation.error.errors[0].message });
+      return;
+    }
+
+    const { reason } = validation.data;
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        courier: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            fcmToken: true,
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    // Cannot cancel already delivered or cancelled deliveries
+    if (delivery.status === DeliveryStatus.DELIVERED) {
+      res.status(400).json({ success: false, error: 'No se puede cancelar una entrega ya entregada' });
+      return;
+    }
+
+    if (delivery.status === DeliveryStatus.CANCELLED) {
+      res.status(400).json({ success: false, error: 'La entrega ya está cancelada' });
+      return;
+    }
+
+    // Only ADMIN and DISPATCHER can cancel (couriers cannot cancel)
+    if (req.user!.role !== Role.ADMIN && req.user!.role !== Role.DISPATCHER) {
+      res.status(403).json({ success: false, error: 'Solo administradores y despachadores pueden cancelar entregas' });
+      return;
+    }
+
+    const updatedDelivery = await prisma.delivery.update({
+      where: { id },
+      data: {
+        status: DeliveryStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancelledBy: req.user!.userId,
+        cancellationReason: reason,
+        courierId: null, // Unassign courier
+      },
+      include: {
+        customer: true,
+        courier: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            fcmToken: true,
+          },
+        },
+        photos: true,
+      },
+    });
+
+    // Notify courier if assigned
+    if (delivery.courier?.fcmToken) {
+      await sendPushNotification(
+        delivery.courier.fcmToken,
+        '❌ Entrega cancelada',
+        `La entrega para ${delivery.customer.name} ha sido cancelada`,
+        { deliveryId: delivery.id, type: 'DELIVERY_CANCELLED' }
+      );
+    }
+
+    res.json({ success: true, data: normalizeDeliveryLatLng(updatedDelivery) });
+  } catch (error) {
+    console.error('Cancel delivery error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 }

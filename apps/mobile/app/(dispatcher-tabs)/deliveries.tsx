@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { assignDelivery, createDelivery, getCouriers, getCustomers, getDeliveries, updateDelivery } from '@/lib/api/dispatcher';
+import { assignDelivery, createDelivery, getCouriers, getCustomers, getDeliveries, updateDelivery, rescheduleDelivery, cancelDelivery } from '@/lib/api/dispatcher';
 import { connectSocket } from '@/lib/services/socket';
 
 export default function DispatcherDeliveriesScreen() {
@@ -44,6 +44,19 @@ export default function DispatcherDeliveriesScreen() {
   const [assignDeliveryId, setAssignDeliveryId] = useState<string | null>(null);
   const [couriersLoading, setCouriersLoading] = useState(false);
   const [couriers, setCouriers] = useState<{ id: string; fullName: string }[]>([]);
+
+  // Reschedule modal state
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleDelivery, setRescheduleDelivery] = useState<any | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
+
+  // Cancel modal state
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelDelivery, setCancelDelivery] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const showAlert = (title: string, message: string) => {
     if (Platform.OS === 'web') {
@@ -243,6 +256,66 @@ export default function DispatcherDeliveriesScreen() {
     }
   };
 
+  const openReschedule = (d: any) => {
+    setRescheduleDelivery(d);
+    setRescheduleDate(d.scheduledDate 
+      ? new Date(d.scheduledDate).toISOString().slice(0, 16) 
+      : new Date().toISOString().slice(0, 16));
+    setRescheduleReason('');
+    setRescheduleOpen(true);
+  };
+
+  const submitReschedule = async () => {
+    if (!rescheduleDelivery?.id) return;
+    if (!rescheduleDate) {
+      showAlert('Error', 'Selecciona una fecha');
+      return;
+    }
+    try {
+      setRescheduleLoading(true);
+      await rescheduleDelivery(rescheduleDelivery.id, {
+        scheduledDate: new Date(rescheduleDate).toISOString(),
+        reason: rescheduleReason.trim() || undefined,
+      });
+      setRescheduleOpen(false);
+      setRescheduleDelivery(null);
+      await refresh();
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.response?.data?.error || 'Error reagendando entrega';
+      showAlert('Error', msg);
+    } finally {
+      setRescheduleLoading(false);
+    }
+  };
+
+  const openCancel = (d: any) => {
+    setCancelDelivery(d);
+    setCancelReason('');
+    setCancelOpen(true);
+  };
+
+  const submitCancel = async () => {
+    if (!cancelDelivery?.id) return;
+    if (!cancelReason.trim() || cancelReason.trim().length < 3) {
+      showAlert('Error', 'Debes proporcionar un motivo (mínimo 3 caracteres)');
+      return;
+    }
+    try {
+      setCancelLoading(true);
+      await cancelDelivery(cancelDelivery.id, cancelReason.trim());
+      setCancelOpen(false);
+      setCancelDelivery(null);
+      await refresh();
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.response?.data?.error || 'Error cancelando entrega';
+      showAlert('Error', msg);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -276,13 +349,26 @@ export default function DispatcherDeliveriesScreen() {
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end', gap: 6 }}>
-              <Text style={styles.badge}>{item.status}</Text>
+              <Text style={[
+                styles.badge,
+                item.status === 'CANCELLED' && { backgroundColor: '#E5E7EB', color: '#6B7280' },
+              ]}>{item.status}</Text>
               <TouchableOpacity onPress={() => openEdit(item)}>
                 <Text style={styles.link}>Editar</Text>
               </TouchableOpacity>
-              {item.status !== 'DELIVERED' && (
+              {item.status !== 'DELIVERED' && item.status !== 'CANCELLED' && (
                 <TouchableOpacity onPress={() => openAssign(item.id)}>
                   <Text style={styles.link}>{item.courier?.fullName ? 'Reasignar' : 'Asignar'}</Text>
+                </TouchableOpacity>
+              )}
+              {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(item.status)) && (
+                <TouchableOpacity onPress={() => openReschedule(item)}>
+                  <Text style={[styles.link, { color: '#F59E0B' }]}>Reagendar</Text>
+                </TouchableOpacity>
+              )}
+              {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(item.status)) && (
+                <TouchableOpacity onPress={() => openCancel(item)}>
+                  <Text style={[styles.link, { color: '#EF4444' }]}>Cancelar</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -551,6 +637,84 @@ export default function DispatcherDeliveriesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Reschedule Modal */}
+      <Modal visible={rescheduleOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Reagendar Entrega</Text>
+            <Text style={styles.hintText}>
+              {rescheduleDelivery?.trackingCode} - {rescheduleDelivery?.customer?.name}
+            </Text>
+            {rescheduleDelivery?.rescheduledCount > 0 && (
+              <View style={[styles.hintBox, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={{ color: '#92400E', fontSize: 12 }}>
+                  Ya reagendada {rescheduleDelivery.rescheduledCount} vez/veces
+                </Text>
+              </View>
+            )}
+            <Text style={{ marginTop: 8, marginBottom: 4, fontWeight: '600', fontSize: 13 }}>Nueva fecha y hora *</Text>
+            <TextInput
+              style={styles.input}
+              value={rescheduleDate}
+              onChangeText={setRescheduleDate}
+              placeholder="YYYY-MM-DDTHH:mm"
+              editable={!rescheduleLoading}
+            />
+            <Text style={{ marginTop: 8, marginBottom: 4, fontWeight: '600', fontSize: 13 }}>Motivo (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={rescheduleReason}
+              onChangeText={setRescheduleReason}
+              placeholder="Ej: Cliente no disponible"
+              editable={!rescheduleLoading}
+              multiline
+            />
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRescheduleOpen(false)} disabled={rescheduleLoading}>
+                <Text style={styles.secondaryBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#F59E0B' }]} onPress={submitReschedule} disabled={rescheduleLoading}>
+                {rescheduleLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Reagendar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cancel Modal */}
+      <Modal visible={cancelOpen} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Cancelar Entrega</Text>
+            <Text style={styles.hintText}>
+              {cancelDelivery?.trackingCode} - {cancelDelivery?.customer?.name}
+            </Text>
+            <View style={[styles.hintBox, { backgroundColor: '#FEE2E2' }]}>
+              <Text style={{ color: '#991B1B', fontSize: 12 }}>
+                Esta acción no se puede deshacer. El mensajero será desasignado.
+              </Text>
+            </View>
+            <Text style={{ marginTop: 8, marginBottom: 4, fontWeight: '600', fontSize: 13 }}>Motivo de cancelación *</Text>
+            <TextInput
+              style={styles.input}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Ej: Cliente solicitó cancelación"
+              editable={!cancelLoading}
+              multiline
+            />
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCancelOpen(false)} disabled={cancelLoading}>
+                <Text style={styles.secondaryBtnText}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dangerBtn} onPress={submitCancel} disabled={cancelLoading}>
+                {cancelLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.dangerBtnText}>Confirmar Cancelación</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -591,4 +755,5 @@ const styles = StyleSheet.create({
   pillTextActive: { color: '#1D4ED8' },
   input: { backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   hintText: { marginTop: 8, color: '#6B7280', fontSize: 12 },
+  hintBox: { marginTop: 8, padding: 10, borderRadius: 8 },
 });

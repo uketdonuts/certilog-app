@@ -148,6 +148,16 @@ export async function deleteDelivery(deliveryId: string) {
   await api.delete(`/api/deliveries/${deliveryId}`);
 }
 
+export async function rescheduleDelivery(deliveryId: string, data: { scheduledDate: string; reason?: string }) {
+  const response = await api.post(`/api/deliveries/${deliveryId}/reschedule`, data);
+  return response.data.data;
+}
+
+export async function cancelDelivery(deliveryId: string, reason: string) {
+  const response = await api.post(`/api/deliveries/${deliveryId}/cancel`, { reason });
+  return response.data.data;
+}
+
 // Customers
 export async function getCustomers(params?: { page?: number; limit?: number; search?: string }) {
   const response = await api.get('/api/customers', { params });

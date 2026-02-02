@@ -16,7 +16,7 @@ export interface Delivery {
   customerId: string;
   customer: Customer;
   courierId: string | null;
-  status: 'PENDING' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED';
+  status: 'PENDING' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
   description: string | null;
   packageDetails: string | null;
@@ -29,6 +29,10 @@ export interface Delivery {
   deliveredAt: string | null;
   deliveryNotes: string | null;
   rating: number | null;
+  rescheduledCount: number;
+  rescheduleReason: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -145,5 +149,16 @@ export async function syncDeliveries(data: SyncData): Promise<{
   deliveries: Delivery[];
 }> {
   const response = await api.post('/api/deliveries/sync', data);
+  return response.data.data;
+}
+
+export async function rescheduleDelivery(
+  id: string,
+  data: {
+    scheduledDate: string;
+    reason?: string;
+  }
+): Promise<Delivery> {
+  const response = await api.post(`/api/deliveries/${id}/reschedule`, data);
   return response.data.data;
 }

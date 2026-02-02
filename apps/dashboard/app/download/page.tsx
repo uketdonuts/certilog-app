@@ -30,9 +30,15 @@ export default function DownloadPage() {
       // Use the dynamic API route which reads directly from filesystem at runtime.
       // This bypasses Next.js static file caching issues that occur when new APKs
       // are added to the mounted volume without rebuilding the container.
-      const response = await fetch(`/download/apk?t=${Date.now()}`, {
+      // Cache-busting with unique timestamp to prevent browser/CDN caching.
+      const cacheBuster = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const response = await fetch(`/download/apk?_cb=${cacheBuster}`, {
         method: 'HEAD',
         cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
       });
 
       if (response.ok) {

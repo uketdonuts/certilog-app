@@ -13,6 +13,8 @@ import {
   syncDeliveries,
   getDeliveryStats,
   exportDeliveries,
+  rescheduleDelivery,
+  cancelDelivery,
 } from '../controllers/delivery.controller.js';
 import { authenticateToken, requireAdminOrDispatcher, requireCourier } from '../middleware/auth.js';
 
@@ -33,6 +35,10 @@ router.post('/', requireAdminOrDispatcher, createDelivery);
 router.put('/:id/assign', requireAdminOrDispatcher, assignDelivery);
 router.put('/:id', requireAdminOrDispatcher, updateDelivery);
 router.delete('/:id', requireAdminOrDispatcher, deleteDelivery);
+router.post('/:id/cancel', requireAdminOrDispatcher, cancelDelivery);
+
+// Reschedule - Admin/Dispatcher/Courier can reschedule
+router.post('/:id/reschedule', rescheduleDelivery);
 
 // Both can access
 router.get('/:id/route', getDeliveryRoute);

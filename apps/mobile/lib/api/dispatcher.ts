@@ -139,3 +139,19 @@ export async function updateDelivery(
   const response = await api.put(`/api/deliveries/${deliveryId}`, data);
   return response.data.data as Delivery;
 }
+
+export async function rescheduleDelivery(
+  deliveryId: string,
+  data: {
+    scheduledDate: string;
+    reason?: string;
+  }
+) {
+  const response = await api.post(`/api/deliveries/${deliveryId}/reschedule`, data);
+  return response.data.data as Delivery;
+}
+
+export async function cancelDelivery(deliveryId: string, reason: string) {
+  const response = await api.post(`/api/deliveries/${deliveryId}/cancel`, { reason });
+  return response.data.data as Delivery;
+}

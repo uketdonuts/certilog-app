@@ -88,6 +88,17 @@ model Delivery {
   syncedAt            DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  
+  // Rescheduling fields
+  rescheduledFrom     DateTime?
+  rescheduledCount    Int                  @default(0)
+  rescheduleReason    String?
+  
+  // Cancellation fields
+  cancelledAt         DateTime?
+  cancelledBy         String?
+  cancellationReason  String?
+  
   courier             User?                @relation(fields: [courierId], references: [id])
   customer            Customer             @relation(fields: [customerId], references: [id])
   photos              DeliveryPhoto[]
@@ -97,6 +108,7 @@ model Delivery {
   @@index([scheduledDate])
   @@index([trackingCode])
   @@index([publicTrackingToken])
+  @@index([status])
   @@map("deliveries")
 }
 
@@ -316,6 +328,7 @@ enum DeliveryStatus {
   IN_TRANSIT
   DELIVERED
   FAILED
+  CANCELLED
 }
 
 enum Priority {

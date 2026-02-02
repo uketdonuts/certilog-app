@@ -18,6 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
   IN_TRANSIT: '#8B5CF6',
   DELIVERED: '#22C55E',
   FAILED: '#EF4444',
+  CANCELLED: '#6B7280',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -26,6 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
   IN_TRANSIT: 'En tránsito',
   DELIVERED: 'Entregada',
   FAILED: 'Fallida',
+  CANCELLED: 'Cancelada',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -133,6 +135,7 @@ export default function DeliveriesScreen() {
     { key: 'ASSIGNED', label: 'Asignadas' },
     { key: 'IN_TRANSIT', label: 'En tránsito' },
     { key: 'DELIVERED', label: 'Entregadas' },
+    { key: 'CANCELLED', label: 'Canceladas' },
   ];
 
   const currentLabel = filters.find((f) => f.key === filter)?.label || 'Filtrar';
