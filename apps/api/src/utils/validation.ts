@@ -120,7 +120,7 @@ export const completeDeliverySchema = z.object({
   deliveryLng: z.number().min(-180).max(180),
   deliveryNotes: z.string().max(500).optional(),
   extraPhotoUrls: z.array(z.string().min(1)).optional(),
-  rating: z.number().int().min(1).max(10),
+  rating: z.number().int().min(0).max(10).optional(),
 });
 
 export const rescheduleDeliverySchema = z.object({

@@ -19,6 +19,8 @@ import {
   LinkIcon,
   CalendarIcon,
   NoSymbolIcon,
+  EllipsisVerticalIcon,
+  TruckIcon,
 } from '@heroicons/react/24/outline';
 import {
   getDeliveries,
@@ -77,6 +79,7 @@ interface Delivery {
   deliveryNotes?: string;
   rating?: number;
   photos?: DeliveryPhoto[];
+  rescheduledFrom?: string | null;
   rescheduledCount?: number;
   rescheduleReason?: string | null;
   cancelledAt?: string | null;
@@ -114,6 +117,7 @@ export default function DeliveriesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState<Delivery | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Delivery | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<Delivery | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [routePoints, setRoutePoints] = useState<Array<{ lat: number; lng: number; recordedAt: string }>>([]);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -354,7 +358,8 @@ export default function DeliveriesPage() {
   const getPhotoUrl = (url: string) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:2120';
+    // Remove '/api' from the end if present since uploads are served from root
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:2120').replace(/\/api$/, '');
     return `${apiUrl}${url}`;
   }
 
@@ -536,58 +541,89 @@ export default function DeliveriesPage() {
                     {formatPanamaDateTime(delivery.createdAt)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
+                    <div className="relative">
                       <button
-                        onClick={() => handleViewDetails(delivery)}
-                        disabled={loadingDetails}
-                        className="text-gray-600 hover:text-gray-800 text-sm font-medium flex items-center gap-1"
-                        title="Ver detalles"
+                        onClick={() => setOpenMenuId(openMenuId === delivery.id ? null : delivery.id)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        title="Acciones"
                       >
-                        <EyeIcon className="h-4 w-4" />
-                        Ver
+                        <EllipsisVerticalIcon className="h-5 w-5 text-gray-600" />
                       </button>
-                      {delivery.publicTrackingToken && (
-                        <a
-                          href={`/track/${delivery.publicTrackingToken}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
-                          title="Ver seguimiento público"
-                        >
-                          <LinkIcon className="h-4 w-4" />
-                          Seguimiento
-                        </a>
-                      )}
-                      {(delivery.status === 'PENDING' ||
-                        delivery.status === 'ASSIGNED') && (
-                        <button
-                          onClick={() => setShowAssignModal(delivery)}
-                          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                        >
-                          {delivery.courier ? 'Reasignar' : 'Asignar'}
-                        </button>
-                      )}
-                      {/* Reagendar - disponible para PENDING, ASSIGNED, IN_TRANSIT, FAILED */}
-                      {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
-                        <button
-                          onClick={() => setShowRescheduleModal(delivery)}
-                          className="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center gap-1"
-                          title="Reagendar entrega"
-                        >
-                          <CalendarIcon className="h-4 w-4" />
-                          Reagendar
-                        </button>
-                      )}
-                      {/* Cancelar - disponible para PENDING, ASSIGNED, IN_TRANSIT, FAILED */}
-                      {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
-                        <button
-                          onClick={() => setShowCancelModal(delivery)}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"
-                          title="Cancelar entrega"
-                        >
-                          <NoSymbolIcon className="h-4 w-4" />
-                          Cancelar
-                        </button>
+                      
+                      {openMenuId === delivery.id && (
+                        <>
+                          {/* Backdrop to close menu when clicking outside */}
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setOpenMenuId(null)}
+                          />
+                          {/* Dropdown menu */}
+                          <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                            <button
+                              onClick={() => {
+                                handleViewDetails(delivery);
+                                setOpenMenuId(null);
+                              }}
+                              disabled={loadingDetails}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            >
+                              <EyeIcon className="h-4 w-4 text-gray-500" />
+                              Ver detalles
+                            </button>
+                            
+                            {delivery.publicTrackingToken && (
+                              <a
+                                href={`/track/${delivery.publicTrackingToken}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setOpenMenuId(null)}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <TruckIcon className="h-4 w-4 text-green-600" />
+                                Ver seguimiento
+                              </a>
+                            )}
+                            
+                            {(delivery.status === 'PENDING' || delivery.status === 'ASSIGNED') && (
+                              <button
+                                onClick={() => {
+                                  setShowAssignModal(delivery);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <TruckIcon className="h-4 w-4 text-primary-600" />
+                                {delivery.courier ? 'Reasignar' : 'Asignar'}
+                              </button>
+                            )}
+                            
+                            {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
+                              <button
+                                onClick={() => {
+                                  setShowRescheduleModal(delivery);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <CalendarIcon className="h-4 w-4 text-orange-500" />
+                                Reagendar
+                              </button>
+                            )}
+                            
+                            {(['PENDING', 'ASSIGNED', 'IN_TRANSIT', 'FAILED'].includes(delivery.status)) && (
+                              <button
+                                onClick={() => {
+                                  setShowCancelModal(delivery);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <NoSymbolIcon className="h-4 w-4 text-red-500" />
+                                Cancelar
+                              </button>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   </td>

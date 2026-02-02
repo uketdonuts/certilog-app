@@ -88,17 +88,12 @@ model Delivery {
   syncedAt            DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  
-  // Rescheduling fields
-  rescheduledFrom     DateTime?
-  rescheduledCount    Int                  @default(0)
-  rescheduleReason    String?
-  
-  // Cancellation fields
+  cancellationReason  String?
   cancelledAt         DateTime?
   cancelledBy         String?
-  cancellationReason  String?
-  
+  rescheduleReason    String?
+  rescheduledCount    Int                  @default(0)
+  rescheduledFrom     DateTime?
   courier             User?                @relation(fields: [courierId], references: [id])
   customer            Customer             @relation(fields: [customerId], references: [id])
   photos              DeliveryPhoto[]

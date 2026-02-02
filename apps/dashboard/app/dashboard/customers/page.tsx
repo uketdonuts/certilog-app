@@ -6,6 +6,8 @@ import {
   MagnifyingGlassIcon,
   PencilIcon,
   TrashIcon,
+  InformationCircleIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import { getCustomers, createCustomer, updateCustomer, deactivateCustomer, deleteCustomerPermanently } from '@/lib/api';
 import { useToast } from '@/components/ToastProvider';
@@ -40,8 +42,11 @@ export default function CustomersPage() {
     phone: '',
     email: '',
     address: '',
+    latitude: '',
+    longitude: '',
     notes: '',
   });
+  const [showCoordsHelp, setShowCoordsHelp] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -66,7 +71,8 @@ export default function CustomersPage() {
 
   function openNewModal() {
     setEditingCustomer(null);
-    setFormData({ name: '', phone: '', email: '', address: '', notes: '' });
+    setFormData({ name: '', phone: '', email: '', address: '', latitude: '', longitude: '', notes: '' });
+    setShowCoordsHelp(false);
     setShowModal(true);
   }
 
@@ -77,30 +83,30 @@ export default function CustomersPage() {
       phone: customer.phone,
       email: customer.email || '',
       address: customer.address,
+      latitude: customer.latitude?.toString() || '',
+      longitude: customer.longitude?.toString() || '',
       notes: customer.notes || '',
     });
+    setShowCoordsHelp(false);
     setShowModal(true);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
+      const data = {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email || undefined,
+        address: formData.address,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
+        notes: formData.notes || undefined,
+      };
       if (editingCustomer) {
-        await updateCustomer(editingCustomer.id, {
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email || undefined,
-          address: formData.address,
-          notes: formData.notes || undefined,
-        });
+        await updateCustomer(editingCustomer.id, data);
       } else {
-        await createCustomer({
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email || undefined,
-          address: formData.address,
-          notes: formData.notes || undefined,
-        });
+        await createCustomer(data);
       }
       setShowModal(false);
       fetchCustomers();
@@ -330,6 +336,73 @@ export default function CustomersPage() {
                     rows={2}
                     className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
                   />
+                </div>
+
+                {/* Coordenadas GPS */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPinIcon className="h-4 w-4 text-gray-500" />
+                    <label className="text-sm font-medium text-gray-700">
+                      Coordenadas GPS (opcional)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCoordsHelp(!showCoordsHelp)}
+                      className="text-blue-500 hover:text-blue-600"
+                      title="¿Cómo obtener coordenadas?"
+                    >
+                      <InformationCircleIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                  
+                  {showCoordsHelp && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 text-sm text-blue-800">
+                      <p className="font-medium mb-1">¿Cómo obtener coordenadas exactas?</p>
+                      <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                        <li>Abre <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">Google Maps</a></li>
+                        <li>Busca la dirección del cliente</li>
+                        <li>Haz clic derecho en el punto exacto de la ubicación</li>
+                        <li>Selecciona las coordenadas que aparecen (ej: 9.0532, -79.4249)</li>
+                        <li>Copia y pega los valores en los campos de abajo</li>
+                      </ol>
+                      <p className="mt-2 text-xs text-blue-600">
+                        💡 Tip: Las coordenadas precisas ayudan al mensajero a llegar más rápido
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Latitud
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Ej: 9.0532"
+                        value={formData.latitude}
+                        onChange={(e) =>
+                          setFormData({ ...formData, latitude: e.target.value })
+                        }
+                        className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Longitud
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Ej: -79.4249"
+                        value={formData.longitude}
+                        onChange={(e) =>
+                          setFormData({ ...formData, longitude: e.target.value })
+                        }
+                        className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

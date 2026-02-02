@@ -7,6 +7,11 @@ ingress:
     path: ^/api(/.*)?$
     service: http://localhost:3001
   
+  # Uploads - archivos subidos van al API
+  - hostname: certilog.starkmind.dev
+    path: ^/uploads(/.*)?$
+    service: http://localhost:3001
+  
   # Dashboard - todo lo demás
   - hostname: certilog.starkmind.dev
     service: http://localhost:3000

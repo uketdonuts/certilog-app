@@ -23,6 +23,9 @@ export async function getPublicTracking(req: Request, res: Response): Promise<vo
         priority: true,
         createdAt: true,
         deliveredAt: true,
+        // Include actual delivery coordinates for accurate tracking display
+        deliveryLat: true,
+        deliveryLng: true,
         customer: {
           select: {
             // Only return partial address for privacy (zone/sector, not full address)
@@ -47,6 +50,16 @@ export async function getPublicTracking(req: Request, res: Response): Promise<vo
     // Mask the full address - only show general area
     const maskedAddress = maskAddress(delivery.customer?.address ?? '');
 
+    // Use actual delivery coordinates if available (deliveryLat/deliveryLng), 
+    // otherwise fall back to customer coordinates
+    // This matches what the dashboard shows in the delivery details
+    const destinationLat = delivery.status !== 'PENDING' 
+      ? (delivery.deliveryLat ?? delivery.customer?.latitude ?? null)
+      : null;
+    const destinationLng = delivery.status !== 'PENDING'
+      ? (delivery.deliveryLng ?? delivery.customer?.longitude ?? null)
+      : null;
+
     res.json({
       success: true,
       data: {
@@ -57,9 +70,10 @@ export async function getPublicTracking(req: Request, res: Response): Promise<vo
         deliveredAt: delivery.deliveredAt,
         // Only show partial address
         zone: maskedAddress,
-        // Only show destination coordinates if delivery is in progress or completed
-        destinationLat: delivery.status !== 'PENDING' ? delivery.customer?.latitude ?? null : null,
-        destinationLng: delivery.status !== 'PENDING' ? delivery.customer?.longitude ?? null : null,
+        // Use actual delivery coordinates or fall back to customer coordinates
+        // Convert to numbers since Prisma returns Decimals as strings
+        destinationLat: destinationLat != null ? Number(destinationLat) : null,
+        destinationLng: destinationLng != null ? Number(destinationLng) : null,
         // Courier name (first name only for privacy)
         courierName: delivery.courier?.fullName
           ? delivery.courier.fullName.split(' ')[0]
@@ -141,8 +155,8 @@ export async function getPublicCourierLocation(req: Request, res: Response): Pro
       success: true,
       data: {
         available: true,
-        lat: latestPoint.latitude,
-        lng: latestPoint.longitude,
+        lat: Number(latestPoint.latitude),
+        lng: Number(latestPoint.longitude),
         updatedAt: latestPoint.recordedAt,
       },
     });
@@ -204,8 +218,8 @@ export async function getPublicRoutePoints(req: Request, res: Response): Promise
       success: true,
       data: {
         points: simplifiedPoints.map((p) => ({
-          lat: p.latitude,
-          lng: p.longitude,
+          lat: Number(p.latitude),
+          lng: Number(p.longitude),
           recordedAt: p.recordedAt,
         })),
       },

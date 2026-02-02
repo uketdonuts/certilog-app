@@ -70,6 +70,12 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
     bgColor: 'bg-red-100',
     Icon: ExclamationTriangleIcon,
   },
+  CANCELLED: {
+    label: 'Cancelada',
+    color: 'text-gray-600',
+    bgColor: 'bg-gray-100',
+    Icon: ExclamationTriangleIcon,
+  },
 };
 
 export default function PublicTrackingPage() {
@@ -284,7 +290,13 @@ export default function PublicTrackingPage() {
               <p className="text-sm text-gray-500 mb-4">{courierLocation.message}</p>
             )}
 
+            {tracking.destinationLat && tracking.destinationLng && (
+              <p className="text-xs text-gray-400 mb-2">
+                Destino: {tracking.destinationLat.toFixed(6)}, {tracking.destinationLng.toFixed(6)}
+              </p>
+            )}
             <TrackingMap
+              key={`map-${tracking.destinationLat}-${tracking.destinationLng}-${routePoints.length}`}
               routePoints={routePoints}
               courierLocation={
                 courierLocation?.available && courierLocation.lat && courierLocation.lng

@@ -41,14 +41,32 @@ export default function DeliveriesScreen() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [filter, setFilter] = useState<string | null>('ASSIGNED');
+  const [filter, setFilter] = useState<string | null>('ACTIVE');
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const fetchDeliveries = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     try {
-      const response = await getMyDeliveries(1, 50, filter || undefined);
-      setDeliveries(response.data);
+      // If filter is 'ACTIVE', fetch both ASSIGNED and IN_TRANSIT
+      if (filter === 'ACTIVE') {
+        const [assignedRes, inTransitRes] = await Promise.all([
+          getMyDeliveries(1, 50, 'ASSIGNED'),
+          getMyDeliveries(1, 50, 'IN_TRANSIT'),
+        ]);
+        // Combine and sort by priority and date
+        const combined = [...assignedRes.data, ...inTransitRes.data].sort((a, b) => {
+          // Priority order: URGENT > HIGH > NORMAL > LOW
+          const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
+          const priorityDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+          if (priorityDiff !== 0) return priorityDiff;
+          // Then by created date (newest first)
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setDeliveries(combined);
+      } else {
+        const response = await getMyDeliveries(1, 50, filter || undefined);
+        setDeliveries(response.data);
+      }
     } catch (error) {
       console.error('Error fetching deliveries:', error);
     } finally {
@@ -131,11 +149,12 @@ export default function DeliveriesScreen() {
   );
 
   const filters = [
-    { key: null, label: 'Todas' },
+    { key: 'ACTIVE', label: 'Activas (Asignadas + En tránsito)' },
     { key: 'ASSIGNED', label: 'Asignadas' },
     { key: 'IN_TRANSIT', label: 'En tránsito' },
     { key: 'DELIVERED', label: 'Entregadas' },
     { key: 'CANCELLED', label: 'Canceladas' },
+    { key: null, label: 'Todas' },
   ];
 
   const currentLabel = filters.find((f) => f.key === filter)?.label || 'Filtrar';
@@ -194,7 +213,7 @@ export default function DeliveriesScreen() {
             <Ionicons name="cube-outline" size={64} color="#D1D5DB" />
             <Text style={styles.emptyText}>No hay entregas</Text>
             <Text style={styles.emptySubtext}>
-              Las entregas asignadas aparecerán aquí
+              Las entregas activas aparecerán aquí
             </Text>
           </View>
         }
