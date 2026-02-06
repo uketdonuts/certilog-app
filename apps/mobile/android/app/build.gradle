@@ -114,8 +114,8 @@ android {
         applicationId 'com.certilog.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 37
-        versionName "1.0.36"
+        versionCode 42
+        versionName "1.0.41"
     }
     signingConfigs {
         debug {
