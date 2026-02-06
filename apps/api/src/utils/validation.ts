@@ -277,3 +277,21 @@ export const createTireSemaphoreSchema = z.object({
   recordedAt: z.string().datetime().optional(),
 });
 
+// Delivery Product schemas
+export const deliveryProductSchema = z.object({
+  itemNumber: z.string().min(1).max(50),
+  description: z.string().min(1).max(500),
+  assemblyBy: z.string().max(100).optional(),
+  requiresAssembly: z.boolean().default(false),
+});
+
+export const addDeliveryProductsSchema = z.object({
+  products: z.array(deliveryProductSchema).min(1),
+});
+
+export const updateDeliveryProductSchema = z.object({
+  isAssembled: z.boolean().optional(),
+  photoUrl: z.string().optional(),
+  photoPublicId: z.string().optional(),
+});
+

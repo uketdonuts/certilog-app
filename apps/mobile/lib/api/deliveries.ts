@@ -9,6 +9,20 @@ export interface Customer {
   longitude: number | null;
 }
 
+export interface DeliveryProduct {
+  id: string;
+  deliveryId: string;
+  itemNumber: string;
+  description: string;
+  assemblyBy: string | null;
+  requiresAssembly: boolean;
+  isAssembled: boolean;
+  photoUrl: string | null;
+  photoPublicId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Delivery {
   id: string;
   trackingCode: string;
@@ -33,6 +47,7 @@ export interface Delivery {
   rescheduleReason: string | null;
   cancelledAt: string | null;
   cancellationReason: string | null;
+  products?: DeliveryProduct[];
   createdAt: string;
   updatedAt: string;
 }
@@ -160,5 +175,25 @@ export async function rescheduleDelivery(
   }
 ): Promise<Delivery> {
   const response = await api.post(`/api/deliveries/${id}/reschedule`, data);
+  return response.data.data;
+}
+
+// Delivery Products API
+
+export async function getDeliveryProducts(id: string): Promise<DeliveryProduct[]> {
+  const response = await api.get(`/api/deliveries/${id}/products`);
+  return response.data.data;
+}
+
+export async function updateDeliveryProduct(
+  deliveryId: string,
+  productId: string,
+  data: {
+    isAssembled?: boolean;
+    photoUrl?: string;
+    photoPublicId?: string;
+  }
+): Promise<DeliveryProduct> {
+  const response = await api.put(`/api/deliveries/${deliveryId}/products/${productId}`, data);
   return response.data.data;
 }

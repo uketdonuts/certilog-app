@@ -501,3 +501,52 @@ export async function exportDeliveriesToExcel(params?: {
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+// Delivery Products
+export interface DeliveryProduct {
+  id: string;
+  deliveryId: string;
+  itemNumber: string;
+  description: string;
+  assemblyBy?: string;
+  requiresAssembly: boolean;
+  isAssembled: boolean;
+  photoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getDeliveryProducts(deliveryId: string): Promise<DeliveryProduct[]> {
+  const response = await api.get(`/api/deliveries/${deliveryId}/products`);
+  return response.data.data;
+}
+
+export async function addDeliveryProducts(
+  deliveryId: string,
+  products: Array<{
+    itemNumber: string;
+    description: string;
+    assemblyBy?: string;
+    requiresAssembly?: boolean;
+  }>
+) {
+  const response = await api.post(`/api/deliveries/${deliveryId}/products`, { products });
+  return response.data.data;
+}
+
+export async function updateDeliveryProducts(
+  deliveryId: string,
+  products: Array<{
+    itemNumber: string;
+    description: string;
+    assemblyBy?: string;
+    requiresAssembly?: boolean;
+  }>
+) {
+  const response = await api.put(`/api/deliveries/${deliveryId}/products`, { products });
+  return response.data.data;
+}
+
+export async function deleteDeliveryProduct(deliveryId: string, productId: string) {
+  await api.delete(`/api/deliveries/${deliveryId}/products/${productId}`);
+}

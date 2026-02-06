@@ -12,6 +12,8 @@ import {
   syncSchema,
   rescheduleDeliverySchema,
   cancelDeliverySchema,
+  addDeliveryProductsSchema,
+  updateDeliveryProductSchema,
 } from '../utils/validation.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { DeliveryStatus, Role } from '@prisma/client';
@@ -99,6 +101,9 @@ export async function getDeliveries(req: AuthRequest, res: Response): Promise<vo
             },
           },
           photos: true,
+          products: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
       }),
       prisma.delivery.count({ where }),
@@ -153,6 +158,9 @@ export async function getMyDeliveries(req: AuthRequest, res: Response): Promise<
             },
           },
           photos: true,
+          products: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
       }),
       prisma.delivery.count({ where }),
@@ -192,6 +200,9 @@ export async function getDeliveryById(req: AuthRequest, res: Response): Promise<
           },
         },
         photos: true,
+        products: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -1117,6 +1128,216 @@ export async function cancelDelivery(req: AuthRequest, res: Response): Promise<v
     res.json({ success: true, data: normalizeDeliveryLatLng(updatedDelivery) });
   } catch (error) {
     console.error('Cancel delivery error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+
+// Delivery Products Controller Functions
+
+export async function getDeliveryProducts(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+      include: {
+        products: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    // Couriers can only see products for their own deliveries
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
+      res.status(403).json({ success: false, error: 'No tienes permiso para ver esta entrega' });
+      return;
+    }
+
+    res.json({ success: true, data: delivery.products });
+  } catch (error) {
+    console.error('Get delivery products error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function addDeliveryProducts(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+
+    const validation = addDeliveryProductsSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ success: false, error: validation.error.errors[0].message });
+      return;
+    }
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    const { products } = validation.data;
+
+    // Create all products
+    const createdProducts = await prisma.$transaction(
+      products.map((product) =>
+        prisma.deliveryProduct.create({
+          data: {
+            deliveryId: id as string,
+            itemNumber: product.itemNumber,
+            description: product.description,
+            assemblyBy: product.assemblyBy,
+            requiresAssembly: product.requiresAssembly || product.assemblyBy === 'TRANSPORTE',
+          },
+        })
+      )
+    );
+
+    res.status(201).json({ success: true, data: createdProducts });
+  } catch (error) {
+    console.error('Add delivery products error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function updateDeliveryProduct(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+    const productId = String(req.params.productId);
+
+    const validation = updateDeliveryProductSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ success: false, error: validation.error.errors[0].message });
+      return;
+    }
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    // Couriers can only update their own deliveries
+    if ((req.user!.role === Role.COURIER || req.user!.role === Role.HELPER) && delivery.courierId !== req.user!.userId) {
+      res.status(403).json({ success: false, error: 'No tienes permiso para modificar esta entrega' });
+      return;
+    }
+
+    const product = await prisma.deliveryProduct.findFirst({
+      where: { id: productId, deliveryId: id },
+    });
+
+    if (!product) {
+      res.status(404).json({ success: false, error: 'Producto no encontrado' });
+      return;
+    }
+
+    const updatedProduct = await prisma.deliveryProduct.update({
+      where: { id: productId },
+      data: validation.data,
+    });
+
+    res.json({ success: true, data: updatedProduct });
+  } catch (error) {
+    console.error('Update delivery product error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function deleteDeliveryProduct(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+    const productId = String(req.params.productId);
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    const product = await prisma.deliveryProduct.findFirst({
+      where: { id: productId, deliveryId: id },
+    });
+
+    if (!product) {
+      res.status(404).json({ success: false, error: 'Producto no encontrado' });
+      return;
+    }
+
+    await prisma.deliveryProduct.delete({
+      where: { id: productId as string },
+    });
+
+    res.json({ success: true, message: 'Producto eliminado exitosamente' });
+  } catch (error) {
+    console.error('Delete delivery product error:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
+export async function updateAllDeliveryProducts(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const id = String(req.params.id);
+
+    const validation = addDeliveryProductsSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ success: false, error: validation.error.errors[0].message });
+      return;
+    }
+
+    const delivery = await prisma.delivery.findUnique({
+      where: { id },
+    });
+
+    if (!delivery) {
+      res.status(404).json({ success: false, error: 'Entrega no encontrada' });
+      return;
+    }
+
+    const { products } = validation.data;
+
+    // Delete existing products and create new ones in a transaction
+    await prisma.$transaction([
+      prisma.deliveryProduct.deleteMany({
+        where: { deliveryId: id as string },
+      }),
+      ...products.map((product) =>
+        prisma.deliveryProduct.create({
+          data: {
+            deliveryId: id as string,
+            itemNumber: product.itemNumber,
+            description: product.description,
+            assemblyBy: product.assemblyBy,
+            requiresAssembly: product.requiresAssembly || product.assemblyBy === 'TRANSPORTE',
+          },
+        })
+      ),
+    ]);
+
+    // Return updated products
+    const updatedProducts = await prisma.deliveryProduct.findMany({
+      where: { deliveryId: id as string },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ success: true, data: updatedProducts });
+  } catch (error) {
+    console.error('Update all delivery products error:', error);
     res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
 }

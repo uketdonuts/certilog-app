@@ -26,10 +26,10 @@ const navigation = [
   { name: 'Vehículos', href: '/dashboard/vehicles', icon: TruckIcon },
   { name: 'Gasolina', href: '/dashboard/gas', icon: TruckIcon },
   { name: 'Asistencia', href: '/dashboard/absences', icon: ClockIcon },
-  { name: 'Mantenimiento', href: '/dashboard/fleet-maintenance', icon: ExclamationCircleIcon },
-  { name: 'Preventivo', href: '/dashboard/preventive', icon: CheckCircleIcon },
-  { name: 'Reparaciones', href: '/dashboard/repairs', icon: ExclamationCircleIcon },
-  { name: 'Semáforo de llantas', href: '/dashboard/tire-semaphore', icon: MapIcon },
+  // { name: 'Mantenimiento', href: '/dashboard/fleet-maintenance', icon: ExclamationCircleIcon },
+  // { name: 'Preventivo', href: '/dashboard/preventive', icon: CheckCircleIcon },
+  // { name: 'Reparaciones', href: '/dashboard/repairs', icon: ExclamationCircleIcon },
+  // { name: 'Semáforo de llantas', href: '/dashboard/tire-semaphore', icon: MapIcon },
   { name: 'Mapa', href: '/dashboard/map', icon: MapIcon },
 ];
 

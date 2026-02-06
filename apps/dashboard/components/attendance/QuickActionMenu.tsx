@@ -53,8 +53,6 @@ export default function QuickActionMenu({ onSelect, onEdit, currentType, isOpen,
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   const handleActionClick = (type: AttendanceType) => {
     if (type === 'TARDY' || type === 'OVERTIME') {
       setSelectedType(type);
@@ -77,14 +75,24 @@ export default function QuickActionMenu({ onSelect, onEdit, currentType, isOpen,
     }
   };
 
+  if (!isOpen) return null;
+
   // Calculate position based on anchor element
   const anchorRect = anchorRef.current?.getBoundingClientRect();
+  
+  // Default styles with scroll support for small screens
+  const baseStyle: React.CSSProperties = {
+    maxHeight: `calc(100vh - 32px)`,
+    overflowY: 'auto',
+  };
+  
   const style: React.CSSProperties = anchorRect ? {
     position: 'fixed',
-    top: Math.min(anchorRect.bottom + 8, window.innerHeight - 300),
+    top: Math.min(anchorRect.bottom + 8, Math.max(8, window.innerHeight - 400)),
     left: Math.min(anchorRect.left, window.innerWidth - 280),
     zIndex: 50,
-  } : {};
+    ...baseStyle,
+  } : baseStyle;
 
   return (
     <div

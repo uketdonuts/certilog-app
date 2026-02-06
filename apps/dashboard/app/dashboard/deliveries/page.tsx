@@ -21,6 +21,7 @@ import {
   NoSymbolIcon,
   EllipsisVerticalIcon,
   TruckIcon,
+  CubeIcon,
 } from '@heroicons/react/24/outline';
 import {
   getDeliveries,
@@ -38,6 +39,7 @@ import {
 } from '@/lib/api';
 import { useToast } from '@/components/ToastProvider';
 import Pagination from '@/components/Pagination';
+import DeliveryProductsModal from '@/components/DeliveryProductsModal';
 import { formatPanamaDateTime } from '@/lib/utils/dateFormat';
 
 const DeliveryRouteMap = dynamic(() => import('../map/DeliveryRouteMapClient'), { ssr: false });
@@ -117,6 +119,7 @@ export default function DeliveriesPage() {
   const [showDetailsModal, setShowDetailsModal] = useState<Delivery | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState<Delivery | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<Delivery | null>(null);
+  const [showProductsModal, setShowProductsModal] = useState<Delivery | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [routePoints, setRoutePoints] = useState<Array<{ lat: number; lng: number; recordedAt: string }>>([]);
@@ -583,6 +586,18 @@ export default function DeliveriesPage() {
                                 Ver seguimiento
                               </a>
                             )}
+
+                            {/* Products button - available for all statuses */}
+                            <button
+                              onClick={() => {
+                                setShowProductsModal(delivery);
+                                setOpenMenuId(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            >
+                              <CubeIcon className="h-4 w-4 text-blue-600" />
+                              Productos
+                            </button>
                             
                             {(delivery.status === 'PENDING' || delivery.status === 'ASSIGNED') && (
                               <button
@@ -1401,6 +1416,14 @@ export default function DeliveriesPage() {
           </div>
         </div>
       )}
+
+      {/* Delivery Products Modal */}
+      <DeliveryProductsModal
+        delivery={showProductsModal}
+        isOpen={!!showProductsModal}
+        onClose={() => setShowProductsModal(null)}
+        onUpdate={() => fetchData()}
+      />
     </div>
   );
 }

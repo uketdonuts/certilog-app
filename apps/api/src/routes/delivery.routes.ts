@@ -15,6 +15,11 @@ import {
   exportDeliveries,
   rescheduleDelivery,
   cancelDelivery,
+  getDeliveryProducts,
+  addDeliveryProducts,
+  updateDeliveryProduct,
+  deleteDeliveryProduct,
+  updateAllDeliveryProducts,
 } from '../controllers/delivery.controller.js';
 import { authenticateToken, requireAdminOrDispatcher, requireCourier } from '../middleware/auth.js';
 
@@ -45,5 +50,12 @@ router.get('/:id/route', getDeliveryRoute);
 router.get('/:id', getDeliveryById);
 router.put('/:id/start', startDelivery);
 router.put('/:id/complete', completeDelivery);
+
+// Delivery Products routes
+router.get('/:id/products', getDeliveryProducts);
+router.post('/:id/products', requireAdminOrDispatcher, addDeliveryProducts);
+router.put('/:id/products', requireAdminOrDispatcher, updateAllDeliveryProducts);
+router.put('/:id/products/:productId', updateDeliveryProduct);
+router.delete('/:id/products/:productId', requireAdminOrDispatcher, deleteDeliveryProduct);
 
 export default router;

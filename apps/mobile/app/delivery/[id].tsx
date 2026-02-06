@@ -9,11 +9,12 @@ import {
   Alert,
   Share,
   Clipboard,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { getDeliveryById, Delivery, startDelivery, rescheduleDelivery } from '@/lib/api/deliveries';
+import { getDeliveryById, Delivery, startDelivery, rescheduleDelivery, getDeliveryProducts, DeliveryProduct, updateDeliveryProduct } from '@/lib/api/deliveries';
 import { openWhatsApp, callPhone } from '@/lib/services/whatsapp';
 import { openMapsNavigation } from '@/lib/services/location';
 import { useAuth } from '@/lib/context/AuthContext';
@@ -43,23 +44,58 @@ export default function DeliveryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, refreshTracking } = useAuth();
   const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [products, setProducts] = useState<DeliveryProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     fetchDelivery();
+    fetchProducts();
   }, [id]);
 
   const fetchDelivery = async () => {
     try {
       const data = await getDeliveryById(id);
       setDelivery(data);
+      // Also set products if they come with the delivery
+      if (data.products && data.products.length > 0) {
+        setProducts(data.products);
+      }
     } catch (error) {
       console.error('Error fetching delivery:', error);
       Alert.alert('Error', 'No se pudo cargar la entrega');
       router.back();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const data = await getDeliveryProducts(id);
+      setProducts(data);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      // Don't show alert, products might not be available for all deliveries
+    }
+  };
+
+  const handleProductPhoto = (productId: string) => {
+    router.push({
+      pathname: '/delivery/product-photo/[id]',
+      params: { id: delivery?.id, productId }
+    } as any);
+  };
+
+  const toggleProductAssembled = async (product: DeliveryProduct) => {
+    try {
+      const updated = await updateDeliveryProduct(delivery!.id, product.id, {
+        isAssembled: !product.isAssembled,
+      });
+      setProducts(products.map(p => p.id === product.id ? updated : p));
+    } catch (error) {
+      console.error('Error updating product:', error);
+      Alert.alert('Error', 'No se pudo actualizar el producto');
     }
   };
 
@@ -334,6 +370,99 @@ export default function DeliveryDetailScreen() {
               {delivery.packageDetails && (
                 <Text style={styles.detailText}>{delivery.packageDetails}</Text>
               )}
+            </View>
+          </View>
+        )}
+
+        {/* Products Section */}
+        {products.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Productos ({products.length})
+            </Text>
+            <View style={styles.productsCard}>
+              {products.map((product, index) => (
+                <View key={product.id} style={[
+                  styles.productItem,
+                  index < products.length - 1 && styles.productItemBorder
+                ]}>
+                  <View style={styles.productHeader}>
+                    <View style={styles.productNumber}>
+                      <Text style={styles.productNumberText}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productItemNumber}>{product.itemNumber}</Text>
+                      <Text style={styles.productDescription}>{product.description}</Text>
+                      {product.requiresAssembly && (
+                        <View style={styles.assemblyBadge}>
+                          <Ionicons name="construct" size={12} color="#F97316" />
+                          <Text style={styles.assemblyText}>Debe armar</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  
+                  {/* Product Actions */}
+                  {!isCompleted && !isCancelled && (
+                    <View style={styles.productActions}>
+                      {/* Photo Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.productPhotoButton,
+                          product.photoUrl && styles.productPhotoButtonDone
+                        ]}
+                        onPress={() => handleProductPhoto(product.id)}
+                      >
+                        <Ionicons 
+                          name={product.photoUrl ? "checkmark-circle" : "camera"} 
+                          size={20} 
+                          color={product.photoUrl ? "#22C55E" : "#3B82F6"} 
+                        />
+                        <Text style={[
+                          styles.productPhotoText,
+                          product.photoUrl && styles.productPhotoTextDone
+                        ]}>
+                          {product.photoUrl ? 'Foto tomada' : 'Tomar foto'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Assembly Toggle (only if requires assembly) */}
+                      {product.requiresAssembly && (
+                        <TouchableOpacity
+                          style={[
+                            styles.assemblyToggle,
+                            product.isAssembled && styles.assemblyToggleDone
+                          ]}
+                          onPress={() => toggleProductAssembled(product)}
+                        >
+                          <Ionicons 
+                            name={product.isAssembled ? "checkmark-circle" : "ellipse-outline"} 
+                            size={20} 
+                            color={product.isAssembled ? "#22C55E" : "#9CA3AF"} 
+                          />
+                          <Text style={[
+                            styles.assemblyToggleText,
+                            product.isAssembled && styles.assemblyToggleTextDone
+                          ]}>
+                            {product.isAssembled ? 'Armado' : 'Marcar armado'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Product Photo Preview */}
+                  {product.photoUrl && (
+                    <View style={styles.productPhotoPreview}>
+                      <Image 
+                        source={{ uri: product.photoUrl }} 
+                        style={styles.productPhotoImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -684,5 +813,121 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 13,
     fontWeight: '500',
+  },
+  productsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  productItem: {
+    paddingVertical: 12,
+  },
+  productItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  productNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productNumberText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productItemNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  productDescription: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  assemblyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  assemblyText: {
+    fontSize: 11,
+    color: '#F97316',
+    fontWeight: '500',
+  },
+  productActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    marginLeft: 40,
+  },
+  productPhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EBF5FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  productPhotoButtonDone: {
+    backgroundColor: '#F0FDF4',
+  },
+  productPhotoText: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  productPhotoTextDone: {
+    color: '#22C55E',
+  },
+  assemblyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  assemblyToggleDone: {
+    backgroundColor: '#F0FDF4',
+  },
+  assemblyToggleText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  assemblyToggleTextDone: {
+    color: '#22C55E',
+  },
+  productPhotoPreview: {
+    marginTop: 12,
+    marginLeft: 40,
+  },
+  productPhotoImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
   },
 });

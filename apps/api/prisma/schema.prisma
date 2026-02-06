@@ -97,6 +97,7 @@ model Delivery {
   courier             User?                @relation(fields: [courierId], references: [id])
   customer            Customer             @relation(fields: [customerId], references: [id])
   photos              DeliveryPhoto[]
+  products            DeliveryProduct[]
   routePoints         DeliveryRoutePoint[]
 
   @@index([courierId, status])
@@ -120,6 +121,24 @@ model DeliveryPhoto {
 
   @@index([deliveryId])
   @@map("delivery_photos")
+}
+
+model DeliveryProduct {
+  id           String    @id @default(uuid())
+  deliveryId   String
+  itemNumber   String    // Número de artículo (SKU)
+  description  String    // Texto breve de material
+  assemblyBy   String?   // ARMADO POR (ej: TRANSPORTE)
+  requiresAssembly Boolean @default(false) // true si debe armar
+  isAssembled  Boolean   @default(false)  // Si ya fue armado
+  photoUrl     String?   // Foto del producto armado/entregado
+  photoPublicId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  delivery     Delivery  @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+  @@map("delivery_products")
 }
 
 model DeliveryRoutePoint {
